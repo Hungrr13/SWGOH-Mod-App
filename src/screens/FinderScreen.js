@@ -3,10 +3,10 @@ import {
   View, Text, FlatList, StyleSheet, TouchableOpacity, ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Picker } from '@react-native-picker/picker';
 import { CHARS } from '../data/chars';
 import CharacterCard from '../components/CharacterCard';
 import AdBanner from '../components/AdBanner';
+import CustomPicker from '../components/CustomPicker';
 import {
   decodeModSet, decodePrimary,
   MOD_SETS, SHAPES, SHAPE_PRIMARIES, SEC_STATS,
@@ -88,51 +88,36 @@ export default function FinderScreen() {
   const renderHeader = () => (
     <View style={styles.formCard}>
       <Text style={styles.sectionLabel}>Mod Set</Text>
-      <View style={styles.pickerWrap}>
-        <Picker
-          selectedValue={modSet}
-          onValueChange={v => setModSet(v)}
-          style={styles.picker}
-          dropdownIconColor="#94a3b8"
-        >
-          <Picker.Item label="Any set" value={NONE} color="#e2e8f0" />
-          {MOD_SETS.map(s => (
-            <Picker.Item key={s} label={s} value={s} color="#e2e8f0" />
-          ))}
-        </Picker>
-      </View>
+      <CustomPicker
+        selectedValue={modSet}
+        onValueChange={v => setModSet(v)}
+        items={[
+          { label: 'Any set', value: NONE },
+          ...MOD_SETS.map(s => ({ label: s, value: s })),
+        ]}
+      />
 
       <Text style={styles.sectionLabel}>Mod Shape</Text>
-      <View style={styles.pickerWrap}>
-        <Picker
-          selectedValue={shape}
-          onValueChange={v => { setShape(v); setPrimary(NONE); }}
-          style={styles.picker}
-          dropdownIconColor="#94a3b8"
-        >
-          <Picker.Item label="Any shape" value={NONE} color="#e2e8f0" />
-          {SHAPES.map(s => (
-            <Picker.Item key={s} label={s} value={s} color="#e2e8f0" />
-          ))}
-        </Picker>
-      </View>
+      <CustomPicker
+        selectedValue={shape}
+        onValueChange={v => { setShape(v); setPrimary(NONE); }}
+        items={[
+          { label: 'Any shape', value: NONE },
+          ...SHAPES.map(s => ({ label: s, value: s })),
+        ]}
+      />
 
       {shape !== NONE && (
         <>
           <Text style={styles.sectionLabel}>Primary Stat</Text>
-          <View style={styles.pickerWrap}>
-            <Picker
-              selectedValue={primary}
-              onValueChange={setPrimary}
-              style={styles.picker}
-              dropdownIconColor="#94a3b8"
-            >
-              <Picker.Item label="Any primary" value={NONE} color="#e2e8f0" />
-              {primOptions.map(p => (
-                <Picker.Item key={p} label={p} value={p} color="#e2e8f0" />
-              ))}
-            </Picker>
-          </View>
+          <CustomPicker
+            selectedValue={primary}
+            onValueChange={setPrimary}
+            items={[
+              { label: 'Any primary', value: NONE },
+              ...primOptions.map(p => ({ label: p, value: p })),
+            ]}
+          />
         </>
       )}
 
@@ -143,19 +128,15 @@ export default function FinderScreen() {
         [sec3, setSec3, 'Sec Priority 3'],
         [sec4, setSec4, 'Sec Priority 4'],
       ].map(([val, setter, label], i) => (
-        <View key={i} style={styles.pickerWrap}>
-          <Picker
-            selectedValue={val}
-            onValueChange={setter}
-            style={styles.picker}
-            dropdownIconColor="#94a3b8"
-          >
-            <Picker.Item label={label} value={NONE} color="#e2e8f0" />
-            {SEC_STATS.map(s => (
-              <Picker.Item key={s} label={s} value={s} color="#e2e8f0" />
-            ))}
-          </Picker>
-        </View>
+        <CustomPicker
+          key={i}
+          selectedValue={val}
+          onValueChange={setter}
+          items={[
+            { label: label, value: NONE },
+            ...SEC_STATS.map(s => ({ label: s, value: s })),
+          ]}
+        />
       ))}
 
       <View style={styles.btnRow}>
@@ -216,15 +197,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     marginTop: 10,
   },
-  pickerWrap: {
-    backgroundColor: '#0d1520',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#1e2a3a',
-    marginBottom: 4,
-    overflow: 'hidden',
-  },
-  picker: { color: '#e2e8f0', height: 44, paddingLeft: 8 },
   btnRow: { flexDirection: 'row', gap: 8, marginTop: 14 },
   findBtn: {
     flex: 1,

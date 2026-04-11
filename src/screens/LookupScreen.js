@@ -4,34 +4,66 @@ import {
   TouchableOpacity, ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Picker } from '@react-native-picker/picker';
 import { CHARS } from '../data/chars';
 import CharacterCard from '../components/CharacterCard';
 import AdBanner from '../components/AdBanner';
-import {
-  decodeModSet, decodePrimary,
-  MOD_SETS, SHAPES, SHAPE_PRIMARIES, SEC_STATS,
-} from '../constants/modData';
+import CustomPicker from '../components/CustomPicker';
 
 const ALL = 'All';
 
-export default function LookupScreen() {
-  const [query, setQuery]       = useState('');
-  const [setFilter, setSetFilter]       = useState(ALL);
-  const [shapeFilter, setShapeFilter]   = useState(ALL);
-  const [primaryFilter, setPrimaryFilter] = useState(ALL);
-  const [sec1, setSec1] = useState(ALL);
-  const [sec2, setSec2] = useState(ALL);
-  const [sec3, setSec3] = useState(ALL);
-  const [sec4, setSec4] = useState(ALL);
-  const [filtersOpen, setFiltersOpen] = useState(false);
+const ROLES = ['Attacker', 'Support', 'Tank', 'Healer', 'Leader'];
 
-  const primOptions = shapeFilter !== ALL ? [ALL, ...SHAPE_PRIMARIES[shapeFilter]] : [ALL];
+function matchesRole(char, role) {
+  if (role === ALL) return true;
+  const r = char.role;
+  if (role === 'Attacker') return r === 'A' || r === 'Support/Attacker';
+  if (role === 'Support')  return r === 'S' || r === 'Support/Attacker';
+  if (role === 'Tank')     return r === 'K' || r === 'Tank/Leader';
+  if (role === 'Healer')   return r === 'He';
+  if (role === 'Leader')   return r === 'Leader' || r === 'Tank/Leader';
+  return false;
+}
+
+// Clean faction labels mapped to the substring present in the raw faction string
+const FACTIONS = [
+  { label: 'Bad Batch',          match: 'BAD BATCH' },
+  { label: 'Bounty Hunters',     match: 'BOUNTY HUNTERS' },
+  { label: 'Clone Troopers',     match: 'CLONE TROOPERS' },
+  { label: 'Empire / Sith',      match: 'EMPIRE / SITH' },
+  { label: 'Ewoks',              match: 'EWOKS' },
+  { label: 'First Order',        match: 'FIRST ORDER' },
+  { label: 'Galactic Republic',  match: 'GALACTIC REPUBLIC' },
+  { label: 'Geonosians',         match: 'GEONOSIANS' },
+  { label: 'Gungans',            match: 'GUNGANS' },
+  { label: 'Hutt Cartel / ISB',  match: 'HUTT CARTEL' },
+  { label: 'Imperial Troopers',  match: 'IMPERIAL TROOPERS' },
+  { label: 'Inquisitorius',      match: 'INQUISITORIUS' },
+  { label: 'Jawas',              match: 'JAWAS' },
+  { label: 'Jedi',               match: 'JEDI' },
+  { label: 'Mandalorians',       match: 'MANDALORIANS' },
+  { label: 'Miscellaneous',      match: 'MISCELLANEOUS' },
+  { label: 'Nightsisters',       match: 'NIGHTSISTERS' },
+  { label: 'Old Republic',       match: 'OLD REPUBLIC' },
+  { label: 'Phoenix Squadron',   match: 'PHOENIX' },
+  { label: 'Pirates',            match: 'PIRATES' },
+  { label: 'Rebel Fighters',     match: 'REBEL' },
+  { label: 'Resistance',         match: 'RESISTANCE' },
+  { label: 'Rogue One',          match: 'ROGUE ONE' },
+  { label: 'Separatists',        match: 'SEPARATISTS' },
+  { label: 'Sith Empire',        match: 'SITH EMPIRE' },
+  { label: 'Tuskens',            match: 'TUSKENS' },
+  { label: 'Wookiees',           match: 'WOOKIEES' },
+];
+
+export default function LookupScreen() {
+  const [query, setQuery]             = useState('');
+  const [roleFilter, setRoleFilter]   = useState(ALL);
+  const [factionFilter, setFactionFilter] = useState(ALL);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const results = useMemo(() => {
     let filtered = CHARS;
 
-    // Text search
     if (query.trim()) {
       const q = query.trim().toLowerCase();
       filtered = filtered.filter(
@@ -39,43 +71,26 @@ export default function LookupScreen() {
       );
     }
 
-    // Mod set filter
-    if (setFilter !== ALL) {
-      filtered = filtered.filter(c => {
-        const full = decodeModSet(c.modSet);
-        return full.toLowerCase().includes(setFilter.toLowerCase());
-      });
+    if (roleFilter !== ALL) {
+      filtered = filtered.filter(c => matchesRole(c, roleFilter));
     }
 
-    // Shape / primary filter  (Arrow is the only shape with a meaningful primary variation)
-    if (primaryFilter !== ALL) {
-      filtered = filtered.filter(c => {
-        const decoded = decodePrimary(c.arrow);
-        return decoded === primaryFilter;
-      });
+    if (factionFilter !== ALL) {
+      const entry = FACTIONS.find(f => f.label === factionFilter);
+      if (entry) {
+        filtered = filtered.filter(c => c.faction.includes(entry.match));
+      }
     }
 
-    // Secondary stats filters
-    const secFilters = [sec1, sec2, sec3, sec4].filter(s => s !== ALL);
-    if (secFilters.length > 0) {
-      filtered = filtered.filter(c => {
-        const secs = c.secs ?? '';
-        return secFilters.every(sf => secs.includes(sf));
-      });
-    }
-
-    return filtered.slice(0, 40);
-  }, [query, setFilter, primaryFilter, sec1, sec2, sec3, sec4]);
+    return filtered.slice(0, 60);
+  }, [query, roleFilter, factionFilter]);
 
   const clearFilters = useCallback(() => {
-    setSetFilter(ALL);
-    setShapeFilter(ALL);
-    setPrimaryFilter(ALL);
-    setSec1(ALL); setSec2(ALL); setSec3(ALL); setSec4(ALL);
+    setRoleFilter(ALL);
+    setFactionFilter(ALL);
   }, []);
 
-  const hasFilters = setFilter !== ALL || primaryFilter !== ALL ||
-    sec1 !== ALL || sec2 !== ALL || sec3 !== ALL || sec4 !== ALL;
+  const hasFilters = roleFilter !== ALL || factionFilter !== ALL;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -102,57 +117,32 @@ export default function LookupScreen() {
         {/* Filter panel */}
         {filtersOpen && (
           <View style={styles.filterPanel}>
-            <Text style={styles.filterLabel}>Mod Set</Text>
-            <View style={styles.pickerWrap}>
-              <Picker
-                selectedValue={setFilter}
-                onValueChange={setSetFilter}
-                style={styles.picker}
-                dropdownIconColor="#94a3b8"
-              >
-                <Picker.Item label="All Sets" value={ALL} color="#e2e8f0" />
-                {MOD_SETS.map(s => (
-                  <Picker.Item key={s} label={s} value={s} color="#e2e8f0" />
-                ))}
-              </Picker>
-            </View>
-
-            <Text style={styles.filterLabel}>Arrow Primary</Text>
-            <View style={styles.pickerWrap}>
-              <Picker
-                selectedValue={primaryFilter}
-                onValueChange={setPrimaryFilter}
-                style={styles.picker}
-                dropdownIconColor="#94a3b8"
-              >
-                <Picker.Item label="Any Primary" value={ALL} color="#e2e8f0" />
-                {['Speed','Offense%','Health%','Protection%','Accuracy%','Crit Avoidance%','Tenacity%'].map(p => (
-                  <Picker.Item key={p} label={p} value={p} color="#e2e8f0" />
-                ))}
-              </Picker>
-            </View>
-
-            <Text style={styles.filterLabel}>Secondary Stats</Text>
-            {[
-              [sec1, setSec1, 'Sec 1'],
-              [sec2, setSec2, 'Sec 2'],
-              [sec3, setSec3, 'Sec 3'],
-              [sec4, setSec4, 'Sec 4'],
-            ].map(([val, setter, label], i) => (
-              <View key={i} style={styles.pickerWrap}>
-                <Picker
-                  selectedValue={val}
-                  onValueChange={setter}
-                  style={styles.picker}
-                  dropdownIconColor="#94a3b8"
+            {/* Role pills */}
+            <Text style={styles.filterLabel}>Role</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillRow}>
+              {[ALL, ...ROLES].map(r => (
+                <TouchableOpacity
+                  key={r}
+                  style={[styles.pill, roleFilter === r && styles.pillActive]}
+                  onPress={() => setRoleFilter(r)}
                 >
-                  <Picker.Item label={label} value={ALL} color="#e2e8f0" />
-                  {SEC_STATS.map(s => (
-                    <Picker.Item key={s} label={s} value={s} color="#e2e8f0" />
-                  ))}
-                </Picker>
-              </View>
-            ))}
+                  <Text style={[styles.pillText, roleFilter === r && styles.pillTextActive]}>
+                    {r}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {/* Faction picker */}
+            <Text style={styles.filterLabel}>Faction</Text>
+            <CustomPicker
+              selectedValue={factionFilter}
+              onValueChange={setFactionFilter}
+              items={[
+                { label: 'All Factions', value: ALL },
+                ...FACTIONS.map(f => ({ label: f.label, value: f.label })),
+              ]}
+            />
 
             <TouchableOpacity style={styles.clearBtn} onPress={clearFilters}>
               <Text style={styles.clearBtnText}>Clear Filters</Text>
@@ -228,18 +218,22 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 4,
+    marginBottom: 6,
     marginTop: 8,
   },
-  pickerWrap: {
-    backgroundColor: '#0d1520',
-    borderRadius: 6,
+  pillRow: { flexDirection: 'row', marginBottom: 4 },
+  pill: {
     borderWidth: 1,
     borderColor: '#1e2a3a',
-    marginBottom: 4,
-    overflow: 'hidden',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    marginRight: 6,
+    backgroundColor: '#0d1520',
   },
-  picker: { color: '#e2e8f0', height: 44 },
+  pillActive: { borderColor: '#f5a623', backgroundColor: '#1a1200' },
+  pillText: { color: '#94a3b8', fontSize: 13 },
+  pillTextActive: { color: '#f5a623', fontWeight: '700' },
   clearBtn: {
     marginTop: 10,
     alignItems: 'center',

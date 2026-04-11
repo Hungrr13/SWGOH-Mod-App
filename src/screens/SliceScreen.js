@@ -4,8 +4,8 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Picker } from '@react-native-picker/picker';
 import AdBanner from '../components/AdBanner';
+import CustomPicker from '../components/CustomPicker';
 import {
   SHAPES, SHAPE_PRIMARIES, SEC_STATS,
   SLICE_REF, secQualityColor, calcSliceVerdict,
@@ -33,6 +33,16 @@ export default function SliceScreen() {
       next[index] = { ...next[index], [field]: value };
       return next;
     });
+  }
+
+  function clampSecValue(stat, rawValue) {
+    const ref = SLICE_REF.find(r => r.s === stat);
+    if (!ref) return rawValue;
+    const v = parseFloat(rawValue);
+    if (isNaN(v)) return rawValue;
+    const clamped = Math.min(ref.m5, Math.max(0, v));
+    // Keep decimals tidy — up to 3 decimal places
+    return String(parseFloat(clamped.toFixed(3)));
   }
 
   const verdict = useMemo(() => calcSliceVerdict(shape, secs), [shape, secs]);
@@ -70,36 +80,26 @@ export default function SliceScreen() {
         {/* Shape + Primary */}
         <View style={styles.card}>
           <Text style={styles.label}>Mod Shape</Text>
-          <View style={styles.pickerWrap}>
-            <Picker
-              selectedValue={shape}
-              onValueChange={v => { setShape(v); setPrimary(NONE); }}
-              style={styles.picker}
-              dropdownIconColor="#94a3b8"
-            >
-              <Picker.Item label="Select shape…" value={NONE} color="#e2e8f0" />
-              {SHAPES.map(s => (
-                <Picker.Item key={s} label={s} value={s} color="#e2e8f0" />
-              ))}
-            </Picker>
-          </View>
+          <CustomPicker
+            selectedValue={shape}
+            onValueChange={v => { setShape(v); setPrimary(NONE); }}
+            items={[
+              { label: 'Select shape…', value: NONE },
+              ...SHAPES.map(s => ({ label: s, value: s })),
+            ]}
+          />
 
           {shape !== NONE && (
             <>
               <Text style={styles.label}>Primary Stat</Text>
-              <View style={styles.pickerWrap}>
-                <Picker
-                  selectedValue={primary}
-                  onValueChange={setPrimary}
-                  style={styles.picker}
-                  dropdownIconColor="#94a3b8"
-                >
-                  <Picker.Item label="Select primary…" value={NONE} color="#e2e8f0" />
-                  {primOptions.map(p => (
-                    <Picker.Item key={p} label={p} value={p} color="#e2e8f0" />
-                  ))}
-                </Picker>
-              </View>
+              <CustomPicker
+                selectedValue={primary}
+                onValueChange={setPrimary}
+                items={[
+                  { label: 'Select primary…', value: NONE },
+                  ...primOptions.map(p => ({ label: p, value: p })),
+                ]}
+              />
             </>
           )}
         </View>
@@ -109,27 +109,37 @@ export default function SliceScreen() {
           <Text style={styles.cardTitle}>Secondary Stats</Text>
           {secs.map((sec, i) => (
             <View key={i} style={styles.secRow}>
-              <View style={[styles.pickerWrap, { flex: 1, marginRight: 8 }]}>
-                <Picker
-                  selectedValue={sec.stat}
-                  onValueChange={v => updateSec(i, 'stat', v)}
-                  style={styles.picker}
-                  dropdownIconColor="#94a3b8"
-                >
-                  <Picker.Item label={`Stat ${i + 1}`} value={NONE} color="#e2e8f0" />
-                  {SEC_STATS.map(s => (
-                    <Picker.Item key={s} label={s} value={s} color="#e2e8f0" />
-                  ))}
-                </Picker>
-              </View>
-              <TextInput
-                style={styles.valueInput}
-                placeholder="Value"
-                placeholderTextColor="#475569"
-                value={sec.value}
-                onChangeText={v => updateSec(i, 'value', v)}
-                keyboardType="decimal-pad"
+              <CustomPicker
+                selectedValue={sec.stat}
+                onValueChange={v => updateSec(i, 'stat', v)}
+                items={[
+                  { label: `Stat ${i + 1}`, value: NONE },
+                  ...SEC_STATS.map(s => ({ label: s, value: s })),
+                ]}
+                style={{ flex: 1, marginRight: 8 }}
               />
+              <View style={styles.valueCol}>
+                {sec.stat ? (
+                  <Text style={styles.rangeHint}>
+                    {'0 – ' + (SLICE_REF.find(r => r.s === sec.stat)?.m5 ?? '—')}
+                  </Text>
+                ) : (
+                  <Text style={styles.rangeHint}> </Text>
+                )}
+                <TextInput
+                  style={styles.valueInput}
+                  placeholder="Value"
+                  placeholderTextColor="#475569"
+                  value={sec.value}
+                  onChangeText={v => updateSec(i, 'value', v)}
+                  onBlur={() => {
+                    if (sec.stat && sec.value !== '') {
+                      updateSec(i, 'value', clampSecValue(sec.stat, sec.value));
+                    }
+                  }}
+                  keyboardType="decimal-pad"
+                />
+              </View>
             </View>
           ))}
         </View>
@@ -245,16 +255,9 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     marginTop: 8,
   },
-  pickerWrap: {
-    backgroundColor: '#0d1520',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#1e2a3a',
-    overflow: 'hidden',
-    marginBottom: 4,
-  },
-  picker: { color: '#e2e8f0', height: 44, paddingLeft: 8 },
-  secRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  secRow: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 8 },
+  valueCol: { alignItems: 'center' },
+  rangeHint: { color: '#475569', fontSize: 10, marginBottom: 2 },
   valueInput: {
     width: 80,
     backgroundColor: '#0d1520',
