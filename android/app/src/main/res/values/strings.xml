@@ -1,0 +1,12 @@
+<resources>
+  <string name="app_name">Mods SWGOH</string>
+  <string name="expo_splash_screen_resize_mode" translatable="false">contain</string>
+  <string name="expo_splash_screen_status_bar_translucent" translatable="false">false</string>
+  <string name="mod_overlay_notification_channel_name">Overlay Capture</string>
+  <string name="mod_overlay_notification_channel_description">Allows a floating capture button to stay active while reading mods in SWGOH.</string>
+  <string name="mod_overlay_notification_title">Overlay Capture Active</string>
+  <string name="mod_overlay_notification_text">Tap the floating button while viewing a mod to analyze it.</string>
+  <string name="mod_overlay_notification_stop_action">Turn Off</string>
+  <string name="mod_overlay_recommendation_title_default">Capture Ready</string>
+  <string name="mod_overlay_recommendation_body_default">Tap again to capture another mod, or open the app for more details.</string>
+</resources>

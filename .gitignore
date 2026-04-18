@@ -1,1 +1,17 @@
 node_modules/
+
+# Android build artifacts
+android/build/
+android/app/build/
+android/.gradle/
+android/.gradle-user/
+android/.kotlin/
+android/local.properties
+android/captures/
+android/.idea/
+android/app/release/
+*.iml
+*.hprof
+
+# Expo
+.expo/

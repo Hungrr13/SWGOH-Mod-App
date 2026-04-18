@@ -1,0 +1,551 @@
+{
+  "generatedAt": "2026-04-18T16:46:35.527Z",
+  "sourceDir": "tools\\set-classifier\\debug-crops",
+  "labelsPath": "tools\\set-classifier\\debug-crops\\set-labels.json",
+  "samples": [
+    {
+      "file": "Arrow Sets/1776212846702-set.png",
+      "set": "Health",
+      "profile": "arrow",
+      "notes": "Arrow slot sample",
+      "source": "Arrow Sets/1776212846702-set.png",
+      "relativePath": "arrow/health/1776212846702-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776212900307-set.png",
+      "set": "Defense",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776212900307-set.png",
+      "relativePath": "arrow/defense/1776212900307-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776212939296-set.png",
+      "set": "Crit Chance",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776212939296-set.png",
+      "relativePath": "arrow/crit-chance/1776212939296-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776213006583-set.png",
+      "set": "Crit Dmg",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776213006583-set.png",
+      "relativePath": "arrow/crit-dmg/1776213006583-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776213015184-set.png",
+      "set": "Tenacity",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776213015184-set.png",
+      "relativePath": "arrow/tenacity/1776213015184-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776213025983-set.png",
+      "set": "Offense",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776213025983-set.png",
+      "relativePath": "arrow/offense/1776213025983-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217964933-set.png",
+      "set": "Health",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217964933-set.png",
+      "relativePath": "arrow/health/1776217964933-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217970261-set.png",
+      "set": "Health",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217970261-set.png",
+      "relativePath": "arrow/health/1776217970261-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217975352-set.png",
+      "set": "Health",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217975352-set.png",
+      "relativePath": "arrow/health/1776217975352-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217980294-set.png",
+      "set": "Health",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217980294-set.png",
+      "relativePath": "arrow/health/1776217980294-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217993868-set.png",
+      "set": "Defense",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217993868-set.png",
+      "relativePath": "arrow/defense/1776217993868-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217998933-set.png",
+      "set": "Defense",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217998933-set.png",
+      "relativePath": "arrow/defense/1776217998933-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776218003845-set.png",
+      "set": "Defense",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776218003845-set.png",
+      "relativePath": "arrow/defense/1776218003845-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776218007984-set.png",
+      "set": "Defense",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776218007984-set.png",
+      "relativePath": "arrow/defense/1776218007984-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776220013614-set.png",
+      "set": "Crit Chance",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776220013614-set.png",
+      "relativePath": "arrow/crit-chance/1776220013614-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776220018693-set.png",
+      "set": "Crit Chance",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776220018693-set.png",
+      "relativePath": "arrow/crit-chance/1776220018693-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776220024809-set.png",
+      "set": "Crit Chance",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776220024809-set.png",
+      "relativePath": "arrow/crit-chance/1776220024809-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776220036300-set.png",
+      "set": "Health",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776220036300-set.png",
+      "relativePath": "arrow/health/1776220036300-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776220041301-set.png",
+      "set": "Health",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776220041301-set.png",
+      "relativePath": "arrow/health/1776220041301-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776220046931-set.png",
+      "set": "Health",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776220046931-set.png",
+      "relativePath": "arrow/health/1776220046931-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776220055634-set.png",
+      "set": "Tenacity",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776220055634-set.png",
+      "relativePath": "arrow/tenacity/1776220055634-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776220060035-set.png",
+      "set": "Tenacity",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776220060035-set.png",
+      "relativePath": "arrow/tenacity/1776220060035-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776220065619-set.png",
+      "set": "Tenacity",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776220065619-set.png",
+      "relativePath": "arrow/tenacity/1776220065619-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776220075171-set.png",
+      "set": "Defense",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776220075171-set.png",
+      "relativePath": "arrow/defense/1776220075171-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776220080700-set.png",
+      "set": "Defense",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776220080700-set.png",
+      "relativePath": "arrow/defense/1776220080700-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776220087059-set.png",
+      "set": "Defense",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776220087059-set.png",
+      "relativePath": "arrow/defense/1776220087059-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776213035083-set.png",
+      "set": "Potency",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776213035083-set.png",
+      "relativePath": "arrow/potency/1776213035083-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776213044769-set.png",
+      "set": "Speed",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776213044769-set.png",
+      "relativePath": "arrow/speed/1776213044769-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217102392-set.png",
+      "set": "Crit Dmg",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217102392-set.png",
+      "relativePath": "arrow/crit-dmg/1776217102392-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217107594-set.png",
+      "set": "Crit Dmg",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217107594-set.png",
+      "relativePath": "arrow/crit-dmg/1776217107594-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217112806-set.png",
+      "set": "Crit Dmg",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217112806-set.png",
+      "relativePath": "arrow/crit-dmg/1776217112806-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217118038-set.png",
+      "set": "Crit Dmg",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217118038-set.png",
+      "relativePath": "arrow/crit-dmg/1776217118038-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217125747-set.png",
+      "set": "Crit Chance",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217125747-set.png",
+      "relativePath": "arrow/crit-chance/1776217125747-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217130609-set.png",
+      "set": "Crit Chance",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217130609-set.png",
+      "relativePath": "arrow/crit-chance/1776217130609-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217135118-set.png",
+      "set": "Crit Chance",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217135118-set.png",
+      "relativePath": "arrow/crit-chance/1776217135118-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217140033-set.png",
+      "set": "Crit Chance",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217140033-set.png",
+      "relativePath": "arrow/crit-chance/1776217140033-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217147354-set.png",
+      "set": "Tenacity",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217147354-set.png",
+      "relativePath": "arrow/tenacity/1776217147354-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217151833-set.png",
+      "set": "Tenacity",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217151833-set.png",
+      "relativePath": "arrow/tenacity/1776217151833-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217158018-set.png",
+      "set": "Tenacity",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217158018-set.png",
+      "relativePath": "arrow/tenacity/1776217158018-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217164360-set.png",
+      "set": "Tenacity",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217164360-set.png",
+      "relativePath": "arrow/tenacity/1776217164360-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217171376-set.png",
+      "set": "Offense",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217171376-set.png",
+      "relativePath": "arrow/offense/1776217171376-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217176218-set.png",
+      "set": "Offense",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217176218-set.png",
+      "relativePath": "arrow/offense/1776217176218-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217181339-set.png",
+      "set": "Offense",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217181339-set.png",
+      "relativePath": "arrow/offense/1776217181339-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217185554-set.png",
+      "set": "Offense",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217185554-set.png",
+      "relativePath": "arrow/offense/1776217185554-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217194604-set.png",
+      "set": "Potency",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217194604-set.png",
+      "relativePath": "arrow/potency/1776217194604-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217199659-set.png",
+      "set": "Potency",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217199659-set.png",
+      "relativePath": "arrow/potency/1776217199659-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217203968-set.png",
+      "set": "Potency",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217203968-set.png",
+      "relativePath": "arrow/potency/1776217203968-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217208539-set.png",
+      "set": "Potency",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217208539-set.png",
+      "relativePath": "arrow/potency/1776217208539-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217217042-set.png",
+      "set": "Speed",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217217042-set.png",
+      "relativePath": "arrow/speed/1776217217042-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217221651-set.png",
+      "set": "Speed",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217221651-set.png",
+      "relativePath": "arrow/speed/1776217221651-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217226586-set.png",
+      "set": "Speed",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217226586-set.png",
+      "relativePath": "arrow/speed/1776217226586-set.png"
+    },
+    {
+      "file": "Arrow Sets/1776217232964-set.png",
+      "set": "Speed",
+      "profile": "arrow",
+      "notes": "",
+      "source": "Arrow Sets/1776217232964-set.png",
+      "relativePath": "arrow/speed/1776217232964-set.png"
+    },
+    {
+      "file": "Generic Sets/1776214604198-set-health.png",
+      "set": "Health",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1776214604198-set-health.png",
+      "relativePath": "generic/health/1776214604198-set-health.png"
+    },
+    {
+      "file": "Generic Sets/1776214615405-set-defense.png",
+      "set": "Defense",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1776214615405-set-defense.png",
+      "relativePath": "generic/defense/1776214615405-set-defense.png"
+    },
+    {
+      "file": "Generic Sets/1776214634221-set-crit damage.png",
+      "set": "Crit Dmg",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1776214634221-set-crit damage.png",
+      "relativePath": "generic/crit-dmg/1776214634221-set-crit damage.png"
+    },
+    {
+      "file": "Generic Sets/1776214643436-set-crit chance.png",
+      "set": "Crit Chance",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1776214643436-set-crit chance.png",
+      "relativePath": "generic/crit-chance/1776214643436-set-crit chance.png"
+    },
+    {
+      "file": "Generic Sets/1776214653675-set-tenacity.png",
+      "set": "Tenacity",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1776214653675-set-tenacity.png",
+      "relativePath": "generic/tenacity/1776214653675-set-tenacity.png"
+    },
+    {
+      "file": "Generic Sets/1776214662275-set-offense.png",
+      "set": "Offense",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1776214662275-set-offense.png",
+      "relativePath": "generic/offense/1776214662275-set-offense.png"
+    },
+    {
+      "file": "Generic Sets/1776214674940-set-potency.png",
+      "set": "Potency",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1776214674940-set-potency.png",
+      "relativePath": "generic/potency/1776214674940-set-potency.png"
+    },
+    {
+      "file": "Generic Sets/1776214685932-set-speed.png",
+      "set": "Speed",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1776214685932-set-speed.png",
+      "relativePath": "generic/speed/1776214685932-set-speed.png"
+    },
+    {
+      "file": "Triangle Sets/1776214697577-set-health.png",
+      "set": "Health",
+      "profile": "triangle",
+      "notes": "",
+      "source": "Triangle Sets/1776214697577-set-health.png",
+      "relativePath": "triangle/health/1776214697577-set-health.png"
+    },
+    {
+      "file": "Triangle Sets/1776214709055-set-defense.png",
+      "set": "Defense",
+      "profile": "triangle",
+      "notes": "",
+      "source": "Triangle Sets/1776214709055-set-defense.png",
+      "relativePath": "triangle/defense/1776214709055-set-defense.png"
+    },
+    {
+      "file": "Triangle Sets/1776214716785-set-crit damage.png",
+      "set": "Crit Dmg",
+      "profile": "triangle",
+      "notes": "",
+      "source": "Triangle Sets/1776214716785-set-crit damage.png",
+      "relativePath": "triangle/crit-dmg/1776214716785-set-crit damage.png"
+    },
+    {
+      "file": "Triangle Sets/1776214724773-set-crit chance.png",
+      "set": "Crit Chance",
+      "profile": "triangle",
+      "notes": "",
+      "source": "Triangle Sets/1776214724773-set-crit chance.png",
+      "relativePath": "triangle/crit-chance/1776214724773-set-crit chance.png"
+    },
+    {
+      "file": "Triangle Sets/1776214733244-set-tenacity.png",
+      "set": "Tenacity",
+      "profile": "triangle",
+      "notes": "",
+      "source": "Triangle Sets/1776214733244-set-tenacity.png",
+      "relativePath": "triangle/tenacity/1776214733244-set-tenacity.png"
+    },
+    {
+      "file": "Triangle Sets/1776214741538-set-offense.png",
+      "set": "Offense",
+      "profile": "triangle",
+      "notes": "",
+      "source": "Triangle Sets/1776214741538-set-offense.png",
+      "relativePath": "triangle/offense/1776214741538-set-offense.png"
+    },
+    {
+      "file": "Triangle Sets/1776214750056-set-potency.png",
+      "set": "Potency",
+      "profile": "triangle",
+      "notes": "",
+      "source": "Triangle Sets/1776214750056-set-potency.png",
+      "relativePath": "triangle/potency/1776214750056-set-potency.png"
+    },
+    {
+      "file": "Triangle Sets/1776214757860-set-speed.png",
+      "set": "Speed",
+      "profile": "triangle",
+      "notes": "",
+      "source": "Triangle Sets/1776214757860-set-speed.png",
+      "relativePath": "triangle/speed/1776214757860-set-speed.png"
+    }
+  ]
+}
