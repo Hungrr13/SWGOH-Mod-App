@@ -16,7 +16,10 @@
 // "Just a moment..." challenge page. We go through our own Cloudflare Worker
 // which proxies to https://swgoh.gg/api/player/<allyCode>/ from Cloudflare's
 // own network (no challenge). Override at runtime via setRosterApiBase().
-const DEFAULT_API_BASE = 'https://swgoh.gg/api/player/';
+// Defaults to Tosche Station's public worker so the feature works without
+// deploying our own. Swap to your own worker via setRosterApiBase() once
+// tools/roster-worker is deployed.
+const DEFAULT_API_BASE = 'https://tosche-station-api.alexholland1987.workers.dev/?allycode=';
 let API_BASE = DEFAULT_API_BASE;
 
 export function setRosterApiBase(url) {

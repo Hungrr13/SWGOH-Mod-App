@@ -39,6 +39,7 @@ This is the current repo map after the cleanup pass. If you are not sure where t
 - `src/services/overlayRecommendation.js`: quick recommendation text for overlay results.
 - `src/services/modTemplateLibrary.js`: scanner template manifest hydration/status helper.
 - `src/services/rosterService.js`: fetches/caches a player's SWGOH roster via ally code (proxied swgoh.gg player API). Exports `fetchRoster`, `getCachedRoster`, `clearCachedRoster`, `ownedBaseIdSet`, `setRosterApiBase`.
+- `src/services/rosterState.js`: module-level roster state holder. Hydrated from AsyncStorage on app start, exposes `getCurrentOwnedIds()` for synchronous reads in the overlay event handler, and `setAllyCode`/`clearAllyCode`/`subscribe` for the ally-code UI.
 
 ## Canonical data
 
@@ -105,6 +106,12 @@ This is the current repo map after the cleanup pass. If you are not sure where t
 - `mask-only` remains a last-resort fallback for when every guided candidate scores below the minimum confidence bar.
 
 ## Recent changes (April 2026)
+
+### Ally-code UI + owned filter plumbed into overlay events (step 4)
+- App menu gets a new "Set Ally Code" action that opens `AllyCodeModal` (defined inline in `App.js`). The modal fetches through `rosterService`, saves the 9-digit code to AsyncStorage, and keeps a Set of owned base_ids in `rosterState` for the overlay event handler to read synchronously.
+- `App.js` hydrates `rosterState` on startup and passes `rosterState.getCurrentOwnedIds()` to `buildOverlayRecommendations` in the `captureSuccess` handler, so scan results filter to characters the player actually owns.
+- Default `rosterService` API base is Tosche Station's public worker — the feature works immediately without deploying anything. Swap to a private worker via `setRosterApiBase()` once `tools/roster-worker` is deployed.
+- Dependency added: `@react-native-async-storage/async-storage` (`npx expo install`).
 
 ### Owned-character filter on overlay recommendations (step 3)
 - `src/services/overlayRecommendation.js` now accepts `options.ownedBaseIds` (a `Set<string>` of swgoh.gg base_ids, from `ownedBaseIdSet(rosterPayload)`). When present and non-empty, `DECODED_CHARS` is filtered to only entries whose `chars.js` name maps to an owned base_id via `src/data/charBaseIds.js` *before* `evaluateSliceMod` runs.
