@@ -68,13 +68,20 @@ export function buildOverlayRecommendation(parsed, options = {}) {
   }
 
   const hiddenEntries = (parsed.secondaries || []).filter(s => s?.hidden);
+  const visibleWithRolls = (parsed.secondaries || []).filter(s =>
+    s && !s.hidden && s.stat && s.stat !== 'Not found'
+    && Number.isFinite(parseInt(s.rolls, 10)) && parseInt(s.rolls, 10) > 0
+  );
+  const allSingleRoll = visibleWithRolls.length >= 1
+    && visibleWithRolls.every(s => parseInt(s.rolls, 10) === 1);
   const secondaries = normalizeSecondaries(parsed.secondaries);
   const hiddenLevels = [...new Set(hiddenEntries.map(h => h.revealLevel).filter(Boolean))].sort((a, b) => a - b);
   const hiddenNote = hiddenEntries.length
     ? `Level this mod to 12 and rescan for slice advice.${hiddenLevels.length ? ` (${hiddenEntries.length} hidden secondary reveals at lvl ${hiddenLevels.join('/')}.)` : ''}`
     : null;
+  const needsLeveling = hiddenEntries.length > 0 || allSingleRoll;
 
-  if (hiddenEntries.length) {
+  if (needsLeveling) {
     const shellOnly = evaluateSliceMod({
       chars: DECODED_CHARS,
       sliceRef: ENGINE_SLICE_REF,
@@ -89,12 +96,15 @@ export function buildOverlayRecommendation(parsed, options = {}) {
       .join(', ');
     const shell = [modSet || null, shape, primary].filter(Boolean).join(' • ');
 
+    const note = hiddenNote
+      || 'Every visible secondary still at (1) — level the mod to 12 and rescan for slice advice.';
+
     return {
       title: 'Level Mod First',
       body: [
         shell,
         likelyUsers ? `Likely users: ${likelyUsers}` : null,
-        hiddenNote,
+        note,
         rawPreview ? `Read: ${rawPreview}` : null,
       ].filter(Boolean).join('\n'),
     };
@@ -192,19 +202,29 @@ export function buildOverlayRecommendations(parsed, options = {}) {
   const topMatches = result.matchedCharacters.slice(0, 6);
   const noUsers = topMatches.length === 0;
   const hasHidden = hiddenEntries.length > 0;
-  const maxReveal = hasHidden ? Math.max(...hiddenEntries.map(h => h.revealLevel || 12)) : 12;
+  const visibleWithRollsDual = (parsed.secondaries || []).filter(s =>
+    s && !s.hidden && s.stat && s.stat !== 'Not found'
+    && Number.isFinite(parseInt(s.rolls, 10)) && parseInt(s.rolls, 10) > 0
+  );
+  const allSingleRollDual = visibleWithRollsDual.length >= 1
+    && visibleWithRollsDual.every(s => parseInt(s.rolls, 10) === 1);
+  const needsLevel = hasHidden || allSingleRollDual;
+  const hiddenLvls = [...new Set(hiddenEntries.map(h => h.revealLevel).filter(Boolean))].sort((a, b) => a - b);
+  const levelBody = hasHidden
+    ? `Level this mod to 12 and rescan for slice advice.${hiddenLvls.length ? ` (${hiddenEntries.length} hidden secondary reveals at lvl ${hiddenLvls.join('/')}.)` : ''}`
+    : 'Every visible secondary still at (1) — level the mod to 12 and rescan for slice advice.';
 
   const sliceTitle = noUsers
     ? 'SELL'
-    : hasHidden
+    : needsLevel
       ? 'Level Mod First'
       : secondaries.length < 2
         ? 'Shell Match'
         : `${result.decision} ${result.finalScore}/100`;
   const sliceBody = noUsers
     ? [shell, 'No characters want this shell.'].filter(Boolean).join('\n')
-    : hasHidden
-      ? [shell, `Level this mod to 12 and rescan for slice advice. (${hiddenEntries.length} secondary${hiddenEntries.length > 1 ? ' stats reveal' : ' reveals'} at lvl ${[...new Set(hiddenEntries.map(h => h.revealLevel).filter(Boolean))].sort((a,b)=>a-b).join('/')}.)`].filter(Boolean).join('\n')
+    : needsLevel
+      ? [shell, levelBody].filter(Boolean).join('\n')
       : secondaries.length < 2
         ? [shell, 'Need 2+ clear secondaries for slice value.'].filter(Boolean).join('\n')
         : [
