@@ -56,6 +56,8 @@ class ModIconClassifier(private val context: Context) {
   @Volatile private var cachedLearnedShapePrototypes: Map<String, List<LearnedShapePrototype>>? = null
   @Volatile private var extendedSetTemplates: Map<String, SetTemplate>? = null
   @Volatile private var learnedSetModels: Map<String, LearnedProfileModel>? = null
+  @Volatile private var rawTemplateStore: Map<String, Map<String, List<FloatArray>>>? = null
+  private val rawTemplateDim = 48
   @Volatile private var extendedAssetsWarmUpStarted = false
   private var lastArrowBurstObservation: ArrowBurstObservation? = null
   private var lastShapeObservation: ShapeObservation? = null
@@ -92,6 +94,12 @@ class ModIconClassifier(private val context: Context) {
     try {
       if (learnedSetModels == null) {
         learnedSetModels = loadLearnedSetModels()
+      }
+    } catch (_: Exception) {
+    }
+    try {
+      if (rawTemplateStore == null) {
+        rawTemplateStore = loadRawImageTemplates()
       }
     } catch (_: Exception) {
     }
@@ -242,7 +250,10 @@ class ModIconClassifier(private val context: Context) {
     } else {
       iconBitmaps.forEach { iconBitmap ->
         val setResult = detectSet(iconBitmap, setProfilesToEvaluate)
-        if (setResult.score > bestSetDetection.score) {
+        val preferByPeak = setResult.peakRawConfidence > bestSetDetection.peakRawConfidence + 0.05
+        val sameByPeak = kotlin.math.abs(setResult.peakRawConfidence - bestSetDetection.peakRawConfidence) <= 0.05
+        val preferByScore = setResult.score > bestSetDetection.score
+        if (preferByPeak || (sameByPeak && preferByScore)) {
           bestSetDetection = setResult
         }
         if (iconBitmap != cardBitmap) {
@@ -3639,6 +3650,8 @@ class ModIconClassifier(private val context: Context) {
     val observedGray: IntArray? = null,
     val burstPatch: DoubleArray? = null,
     val debugText: String? = null,
+    val peakRawConfidence: Double = 0.0,
+    val peakRawWinner: String? = null,
   )
 
   private data class ArrowBurstObservation(
@@ -3671,6 +3684,11 @@ class ModIconClassifier(private val context: Context) {
       .filter { SET_CROP_PROFILES.contains(it) }
       .distinct()
       .ifEmpty { SET_CROP_PROFILES }
+
+    val classScoreAccumulator: MutableMap<String, MutableList<Double>> = mutableMapOf()
+    val rawPeakPerClass: MutableMap<String, Double> = mutableMapOf()
+    var overallPeakRaw = 0.0
+    var overallPeakRawWinner: String? = null
 
     profilesToEvaluate.forEach { profile ->
       cropSetSymbolVariants(iconBitmap, profile).forEach { symbolBitmap ->
@@ -3705,7 +3723,16 @@ class ModIconClassifier(private val context: Context) {
           setSymbolSize,
           profile,
         )
-        val modelScoresBySet = activeLearnedSetModels?.get(profile)?.scoreByLabel(observedModelFeatures).orEmpty()
+        val rawTemplateResult = scoreBitmapAgainstRawTemplates(symbolBitmap, profile)
+        val modelScoresBySet = rawTemplateResult.probabilities
+        rawTemplateResult.rawScores.forEach { (name, score) ->
+          val existing = rawPeakPerClass[name] ?: Double.NEGATIVE_INFINITY
+          if (score > existing) rawPeakPerClass[name] = score
+        }
+        if (rawTemplateResult.peakRaw > overallPeakRaw) {
+          overallPeakRaw = rawTemplateResult.peakRaw
+          overallPeakRawWinner = rawTemplateResult.peakWinner
+        }
         val burstDecision = if (profile == "arrow") {
           arrowBurstDecision(
             bitmap = symbolBitmap,
@@ -3861,6 +3888,10 @@ class ModIconClassifier(private val context: Context) {
             Regex("final=([-\\d.]+)").find(line)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
           }
           .forEach { Log.d(TAG, "setScore $it") }
+        scoredMatches.forEach { match ->
+          val baseName = match.name.substringBefore(" [")
+          classScoreAccumulator.getOrPut(baseName) { mutableListOf() }.add(match.score)
+        }
         val bestMatch = sortedMatches.firstOrNull()
         val secondBestScore = sortedMatches.getOrNull(1)?.score ?: 0.0
         val bestScore = bestMatch?.score ?: 0.0
@@ -3906,6 +3937,59 @@ class ModIconClassifier(private val context: Context) {
       }
     }
 
+    if (classScoreAccumulator.isNotEmpty()) {
+      val aggregates = classScoreAccumulator.mapValues { (_, scores) ->
+        val sorted = scores.sortedDescending()
+        val topK = sorted.take(kotlin.math.max(1, sorted.size / 2))
+        topK.average()
+      }
+      val ranked = aggregates.entries.sortedByDescending { it.value }
+      Log.d(TAG, "setScore aggregate --- across ${classScoreAccumulator.values.firstOrNull()?.size ?: 0} variants ---")
+      ranked.take(6).forEach { (name, avg) ->
+        Log.d(TAG, "setScore aggregate $name avg(topHalf)=${String.format(java.util.Locale.US, "%.3f", avg)}")
+      }
+      val aggregateWinner = ranked.firstOrNull()
+      if (aggregateWinner != null && aggregateWinner.key != bestResult.name) {
+        val winnerScores = classScoreAccumulator[aggregateWinner.key].orEmpty()
+        val runnerUpAvg = ranked.getOrNull(1)?.value ?: 0.0
+        val marginOk = aggregateWinner.value >= runnerUpAvg * 1.08 || (aggregateWinner.value - runnerUpAvg) >= 0.04
+        if (marginOk && winnerScores.any { it >= 0.18 }) {
+          Log.d(TAG, "setScore aggregate override: ${bestResult.name} -> ${aggregateWinner.key}")
+          bestResult = bestResult.copy(
+            name = aggregateWinner.key,
+            score = winnerScores.maxOrNull() ?: bestResult.score,
+          )
+        }
+      }
+    }
+
+    if (overallPeakRaw >= 0.55 && overallPeakRawWinner != null && overallPeakRawWinner != bestResult.name) {
+      val peakRunnerUp = rawPeakPerClass.entries
+        .filter { it.key != overallPeakRawWinner }
+        .maxOfOrNull { it.value } ?: 0.0
+      val rawMargin = overallPeakRaw - peakRunnerUp
+      if (rawMargin >= 0.05) {
+        Log.d(TAG, "setScore rawPeak override: ${bestResult.name} -> $overallPeakRawWinner (peak=${String.format(java.util.Locale.US, "%.3f", overallPeakRaw)}, margin=${String.format(java.util.Locale.US, "%.3f", rawMargin)})")
+        val winnerAgg = classScoreAccumulator[overallPeakRawWinner].orEmpty()
+        bestResult = bestResult.copy(
+          name = overallPeakRawWinner,
+          score = winnerAgg.maxOrNull() ?: bestResult.score,
+          peakRawConfidence = overallPeakRaw,
+          peakRawWinner = overallPeakRawWinner,
+        )
+      } else {
+        bestResult = bestResult.copy(
+          peakRawConfidence = overallPeakRaw,
+          peakRawWinner = overallPeakRawWinner,
+        )
+      }
+    } else {
+      bestResult = bestResult.copy(
+        peakRawConfidence = overallPeakRaw,
+        peakRawWinner = overallPeakRawWinner,
+      )
+    }
+
     if (
       bestResult.profile != null &&
       bestResult.observedPrimaryMask != null &&
@@ -3937,8 +4021,8 @@ class ModIconClassifier(private val context: Context) {
 
   private fun setProfilesForShape(shapeName: String?): List<String> {
     return when (shapeName?.trim()) {
-      "Arrow" -> listOf("arrow", "generic")
-      "Triangle" -> listOf("triangle", "generic")
+      "Arrow" -> listOf("arrow")
+      "Triangle" -> listOf("triangle")
       "Square", "Diamond", "Circle", "Cross" -> listOf("generic")
       else -> listOf("generic")
     }
@@ -3964,7 +4048,140 @@ class ModIconClassifier(private val context: Context) {
         learnedSetModels = loadLearnedSetModels()
       } catch (_: Exception) {
       }
+      try {
+        rawTemplateStore = loadRawImageTemplates()
+      } catch (_: Exception) {
+      }
     }, "ModIconClassifierWarmup").start()
+  }
+
+  private fun rawTemplateWindowMask(profile: String, dim: Int): BooleanArray {
+    val mask = BooleanArray(dim * dim)
+    val cxRatio = 0.50
+    val cyRatio = when (profile) {
+      "arrow" -> 0.52
+      "triangle" -> 0.62
+      else -> 0.54
+    }
+    val rxRatio = when (profile) {
+      "arrow" -> 0.26
+      "triangle" -> 0.22
+      else -> 0.26
+    }
+    val ryRatio = when (profile) {
+      "arrow" -> 0.22
+      "triangle" -> 0.20
+      else -> 0.22
+    }
+    val cx = dim * cxRatio
+    val cy = dim * cyRatio
+    val rx = dim * rxRatio
+    val ry = dim * ryRatio
+    for (y in 0 until dim) {
+      for (x in 0 until dim) {
+        val dx = (x - cx) / rx
+        val dy = (y - cy) / ry
+        mask[y * dim + x] = (dx * dx + dy * dy) <= 1.0
+      }
+    }
+    return mask
+  }
+
+  private fun normalizedGrayscaleTemplate(bitmap: Bitmap, dim: Int, profile: String = "generic"): FloatArray {
+    val scaled = Bitmap.createScaledBitmap(bitmap, dim, dim, true)
+    val windowMask = rawTemplateWindowMask(profile, dim)
+    val floats = FloatArray(dim * dim)
+    var sum = 0.0
+    var count = 0
+    for (y in 0 until dim) {
+      for (x in 0 until dim) {
+        val idx = y * dim + x
+        if (!windowMask[idx]) {
+          floats[idx] = 0f
+          continue
+        }
+        val luma = luminance(scaled.getPixel(x, y)).toFloat()
+        floats[idx] = luma
+        sum += luma
+        count += 1
+      }
+    }
+    if (scaled !== bitmap) scaled.recycle()
+    if (count == 0) return floats
+    val mean = (sum / count).toFloat()
+    var variance = 0.0
+    for (i in floats.indices) {
+      if (windowMask[i]) {
+        val d = floats[i] - mean
+        variance += (d * d).toDouble()
+      }
+    }
+    val std = kotlin.math.sqrt(variance / count).toFloat().coerceAtLeast(1e-3f)
+    for (i in floats.indices) {
+      floats[i] = if (windowMask[i]) (floats[i] - mean) / std else 0f
+    }
+    return floats
+  }
+
+  private fun loadRawImageTemplates(): Map<String, Map<String, List<FloatArray>>> {
+    val byProfile = mutableMapOf<String, MutableMap<String, MutableList<FloatArray>>>()
+    loadLearnedSampleDescriptors().forEach { descriptor ->
+      try {
+        context.assets.open(descriptor.assetPath).use { stream ->
+          val bitmap = BitmapFactory.decodeStream(stream) ?: return@use
+          val tpl = normalizedGrayscaleTemplate(bitmap, rawTemplateDim, descriptor.profile)
+          bitmap.recycle()
+          byProfile
+            .getOrPut(descriptor.profile) { mutableMapOf() }
+            .getOrPut(descriptor.setName) { mutableListOf() }
+            .add(tpl)
+        }
+      } catch (_: Exception) {
+      }
+    }
+    return byProfile.mapValues { (_, sets) ->
+      sets.mapValues { (_, list) -> list.toList() }
+    }
+  }
+
+  private data class RawTemplateScores(
+    val probabilities: Map<String, Double>,
+    val rawScores: Map<String, Double>,
+    val peakRaw: Double,
+    val peakWinner: String?,
+    val peakMargin: Double,
+  )
+
+  private fun scoreBitmapAgainstRawTemplates(bitmap: Bitmap, profile: String): RawTemplateScores {
+    val store = rawTemplateStore
+    val templates = store?.get(profile) ?: emptyMap()
+    if (templates.isEmpty()) return RawTemplateScores(emptyMap(), emptyMap(), 0.0, null, 0.0)
+    val observed = normalizedGrayscaleTemplate(bitmap, rawTemplateDim, profile)
+    val windowMask = rawTemplateWindowMask(profile, rawTemplateDim)
+    val windowCount = windowMask.count { it }.coerceAtLeast(1)
+    val rawScores = templates.mapValues { (_, list) ->
+      list.maxOfOrNull { tpl ->
+        var dot = 0.0
+        for (i in observed.indices) {
+          if (windowMask[i]) dot += observed[i] * tpl[i]
+        }
+        dot / windowCount
+      } ?: 0.0
+    }
+    val sorted = rawScores.entries.sortedByDescending { it.value }
+    val peakEntry = sorted.firstOrNull()
+    val peakRaw = peakEntry?.value ?: 0.0
+    val peakWinner = peakEntry?.key
+    val peakMargin = peakRaw - (sorted.getOrNull(1)?.value ?: peakRaw)
+    val temperature = 20.0
+    val exps = rawScores.mapValues { (_, v) -> kotlin.math.exp((v - peakRaw) * temperature) }
+    val sum = exps.values.sum()
+    val probabilities = if (sum <= 0.0) emptyMap() else exps.mapValues { (_, v) -> v / sum }
+    Log.d(
+      TAG,
+      "rawTemplate profile=$profile peak=$peakWinner:${String.format(java.util.Locale.US, "%.3f", peakRaw)} margin=${String.format(java.util.Locale.US, "%.3f", peakMargin)} top=${sorted.take(4).joinToString(",") { "${it.key}:${String.format(java.util.Locale.US, "%.3f", it.value)}" }}",
+    )
+    return RawTemplateScores(probabilities, rawScores, peakRaw, peakWinner, peakMargin)
   }
 
   fun rememberValidatedArrowBurst(setName: String) {
@@ -4060,10 +4277,10 @@ class ModIconClassifier(private val context: Context) {
         floatArrayOf(0.08f, 0.16f, 0.48f, 0.54f),
       )
       "triangle" -> listOf(
-        floatArrayOf(0.18f, 0.41f, 0.26f, 0.26f),
-        floatArrayOf(0.17f, 0.39f, 0.28f, 0.28f),
-        floatArrayOf(0.20f, 0.43f, 0.24f, 0.24f),
-        floatArrayOf(0.15f, 0.38f, 0.30f, 0.30f),
+        floatArrayOf(0.12f, 0.20f, 0.44f, 0.50f),
+        floatArrayOf(0.10f, 0.18f, 0.46f, 0.52f),
+        floatArrayOf(0.14f, 0.22f, 0.42f, 0.48f),
+        floatArrayOf(0.08f, 0.16f, 0.48f, 0.54f),
       )
       else -> listOf(
         floatArrayOf(0.18f, 0.39f, 0.28f, 0.28f),
@@ -5128,9 +5345,40 @@ class ModIconClassifier(private val context: Context) {
     return keepOuterRoundEdgeComponents(keepOuterRingBand(mask, size), size)
   }
 
+  private data class CenterPolarity(
+    val inverted: Boolean,
+    val centerLuma: Double,
+    val centerSat: Double,
+  )
+
+  private fun sampleCenterPolarity(scaled: Bitmap): CenterPolarity {
+    val size = setSymbolSize
+    val x0 = (size * 0.30f).toInt()
+    val x1 = (size * 0.70f).toInt()
+    val y0 = (size * 0.30f).toInt()
+    val y1 = (size * 0.70f).toInt()
+    var lumaSum = 0.0
+    var satSum = 0.0
+    var count = 0
+    for (y in y0 until y1) {
+      for (x in x0 until x1) {
+        val c = scaled.getPixel(x, y)
+        lumaSum += luminance(c)
+        satSum += saturation(c)
+        count += 1
+      }
+    }
+    if (count == 0) return CenterPolarity(false, 0.0, 0.0)
+    val meanLuma = lumaSum / count
+    val meanSat = satSum / count
+    val inverted = meanSat > 0.25 && meanLuma in 55.0..135.0
+    return CenterPolarity(inverted, meanLuma, meanSat)
+  }
+
   private fun buildObservedSymbolMask(bitmap: Bitmap, profile: String = "generic"): BooleanArray {
     val scaled = Bitmap.createScaledBitmap(bitmap, setSymbolSize, setSymbolSize, true)
     val mask = BooleanArray(setSymbolSize * setSymbolSize)
+    val polarity = sampleCenterPolarity(scaled)
     for (y in 0 until setSymbolSize) {
       for (x in 0 until setSymbolSize) {
         if (!isWithinSetBadgeWindow(x, y, setSymbolSize)) {
@@ -5142,15 +5390,27 @@ class ModIconClassifier(private val context: Context) {
         val saturation = saturation(color)
         val alphaLike = Color.alpha(color)
         val edgeContrast = localEdgeContrast(scaled, x, y, setSymbolSize)
-        val brightSymbol = luminance > 92
-        val saturatedSymbol = saturation > 0.14f && luminance > 54
-        val contrastSymbol = edgeContrast > 16 && luminance > 42
-        val darkEdgeSymbol = edgeContrast > 20 && luminance in 28..120
         val centerWeight = centerWeight(x, y, setSymbolSize)
+        val marked = if (polarity.inverted) {
+          val tightlyCentered = centerWeight > 0.32
+          val darkSymbol = luminance < polarity.centerLuma - 28 &&
+            luminance > 6 &&
+            saturation < 0.32f
+          val edgeSymbol = edgeContrast > 18 &&
+            luminance < polarity.centerLuma - 12 &&
+            saturation < 0.38f
+          tightlyCentered && (darkSymbol || edgeSymbol)
+        } else {
+          val brightSymbol = luminance > 92
+          val saturatedSymbol = saturation > 0.14f && luminance > 54
+          val contrastSymbol = edgeContrast > 16 && luminance > 42
+          val darkEdgeSymbol = edgeContrast > 20 && luminance in 28..120
+          brightSymbol || saturatedSymbol || contrastSymbol || darkEdgeSymbol
+        }
         mask[y * setSymbolSize + x] =
           alphaLike > 12 &&
           centerWeight > 0.16 &&
-          (brightSymbol || saturatedSymbol || contrastSymbol || darkEdgeSymbol)
+          marked
       }
     }
     scaled.recycle()
@@ -5160,6 +5420,7 @@ class ModIconClassifier(private val context: Context) {
   private fun buildObservedSymbolEdgeMask(bitmap: Bitmap, profile: String = "generic"): BooleanArray {
     val scaled = Bitmap.createScaledBitmap(bitmap, setSymbolSize, setSymbolSize, true)
     val mask = BooleanArray(setSymbolSize * setSymbolSize)
+    val polarity = sampleCenterPolarity(scaled)
     for (y in 1 until setSymbolSize - 1) {
       for (x in 1 until setSymbolSize - 1) {
         if (!isWithinSetBadgeWindow(x, y, setSymbolSize)) {
@@ -5171,14 +5432,25 @@ class ModIconClassifier(private val context: Context) {
         val horizontalContrast = kotlin.math.abs(luma - luminance(scaled.getPixel(x + 1, y)))
         val verticalContrast = kotlin.math.abs(luma - luminance(scaled.getPixel(x, y + 1)))
         val saturation = saturation(color)
-        val brightSymbol = luma > 62
-        val sharpEdge = horizontalContrast > 16 || verticalContrast > 16
-        val coloredSymbol = saturation > 0.12f && luma > 46
-        val darkSharpEdge = (horizontalContrast > 20 || verticalContrast > 20) && luma > 24
         val centered = centerWeight(x, y, setSymbolSize) > 0.18
-        mask[y * setSymbolSize + x] = centered && sharpEdge && (brightSymbol || coloredSymbol)
-        if (!mask[y * setSymbolSize + x] && centered) {
-          mask[y * setSymbolSize + x] = darkSharpEdge
+        if (!centered) {
+          mask[y * setSymbolSize + x] = false
+          continue
+        }
+        mask[y * setSymbolSize + x] = if (polarity.inverted) {
+          val tightlyCentered = centerWeight(x, y, setSymbolSize) > 0.32
+          val darkSymbol = luma < polarity.centerLuma - 28 &&
+            luma > 6 &&
+            saturation < 0.32f
+          val sharpEdge = horizontalContrast > 18 || verticalContrast > 18
+          val edgeDark = luma < polarity.centerLuma - 12 && saturation < 0.38f
+          tightlyCentered && (darkSymbol || (sharpEdge && edgeDark))
+        } else {
+          val brightSymbol = luma > 62
+          val sharpEdge = horizontalContrast > 16 || verticalContrast > 16
+          val coloredSymbol = saturation > 0.12f && luma > 46
+          val darkSharpEdge = (horizontalContrast > 20 || verticalContrast > 20) && luma > 24
+          (sharpEdge && (brightSymbol || coloredSymbol)) || darkSharpEdge
         }
       }
     }

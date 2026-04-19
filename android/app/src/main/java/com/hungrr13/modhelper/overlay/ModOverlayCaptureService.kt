@@ -1715,13 +1715,7 @@ class ModOverlayCaptureService : Service() {
 
     return when {
       primarySpeedValue -> "arrow"
-      normalizedPrimary.contains("crit chance") ||
-        normalizedPrimary.contains("crit dmg") ||
-        normalizedPrimary.contains("crit damage") -> "triangle"
-      normalizedPrimary.contains("speed") ||
-        normalizedPrimary.contains("accuracy") ||
-        normalizedPrimary.contains("crit avoidance") -> "arrow"
-      else -> "generic"
+      else -> null
     }
   }
 
