@@ -361,10 +361,14 @@ function extractSecondaries(lines, primary, fullText = '') {
     if (lower.includes('slice mod')) return;
     if (lower.includes('mod is at max level')) return;
 
-    const revealMatch = line.match(/reveal(?:s|ed)?\s*(?:at)?\s*(?:lvl\.?|level)\s*(\d+)/i);
-    if (revealMatch) {
-      const revealLevel = Number(revealMatch[1]);
-      const hiddenKey = `__hidden_${revealLevel}_${found.length}`;
+    // Hidden-secondary marker. OCR frequently mangles "lvl" → "Ivl" / "1vl"
+    // and may drop punctuation, so we only require the word "revea" plus a
+    // plausible reveal level (1–15) anywhere on the line.
+    if (/revea/i.test(line)) {
+      const digitMatch = line.match(/\b(\d{1,2})\b/);
+      const revealLevel = digitMatch ? Number(digitMatch[1]) : null;
+      const validLevel = revealLevel !== null && revealLevel >= 1 && revealLevel <= 15;
+      const hiddenKey = `__hidden_${validLevel ? revealLevel : 'x'}_${found.length}`;
       if (!seen.has(hiddenKey)) {
         seen.add(hiddenKey);
         found.push({
@@ -372,7 +376,7 @@ function extractSecondaries(lines, primary, fullText = '') {
           value: null,
           raw: line,
           hidden: true,
-          revealLevel,
+          revealLevel: validLevel ? revealLevel : null,
         });
       }
       return;
@@ -444,6 +448,29 @@ function extractSecondaries(lines, primary, fullText = '') {
         value,
         raw: match[0],
         rolls: Number(match[1]),
+      });
+      if (found.length >= 4) break;
+    }
+  }
+
+  // Scan fullText for any reveal markers we might have missed when lines
+  // were split oddly. OCR often breaks "Reveals at lvl. 3/6/9" across lines.
+  const alreadyHidden = found.filter(f => f.hidden).length;
+  if (found.length < 4 && fullText) {
+    const hiddenRegex = /revea\w*[^\n\r]{0,30}?(\d{1,2})/gi;
+    let rm;
+    const seenLevels = new Set(found.filter(f => f.hidden).map(f => f.revealLevel));
+    while ((rm = hiddenRegex.exec(fullText)) !== null) {
+      const lvl = Number(rm[1]);
+      if (!lvl || lvl < 1 || lvl > 15) continue;
+      if (seenLevels.has(lvl)) continue;
+      seenLevels.add(lvl);
+      found.push({
+        stat: 'Hidden',
+        value: null,
+        raw: rm[0],
+        hidden: true,
+        revealLevel: lvl,
       });
       if (found.length >= 4) break;
     }
