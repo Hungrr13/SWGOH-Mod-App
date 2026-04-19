@@ -69,6 +69,37 @@ export function buildOverlayRecommendation(parsed, options = {}) {
 
   const hiddenEntries = (parsed.secondaries || []).filter(s => s?.hidden);
   const secondaries = normalizeSecondaries(parsed.secondaries);
+  const hiddenLevels = [...new Set(hiddenEntries.map(h => h.revealLevel).filter(Boolean))].sort((a, b) => a - b);
+  const hiddenNote = hiddenEntries.length
+    ? `Level this mod to 12 and rescan for slice advice.${hiddenLevels.length ? ` (${hiddenEntries.length} hidden secondary reveals at lvl ${hiddenLevels.join('/')}.)` : ''}`
+    : null;
+
+  if (hiddenEntries.length) {
+    const shellOnly = evaluateSliceMod({
+      chars: DECODED_CHARS,
+      sliceRef: ENGINE_SLICE_REF,
+      shape,
+      primary,
+      modSet,
+      secondaries: [],
+    });
+    const likelyUsers = shellOnly.matchedCharacters
+      .slice(0, 4)
+      .map(item => item.name)
+      .join(', ');
+    const shell = [modSet || null, shape, primary].filter(Boolean).join(' • ');
+
+    return {
+      title: 'Level Mod First',
+      body: [
+        shell,
+        likelyUsers ? `Likely users: ${likelyUsers}` : null,
+        hiddenNote,
+        rawPreview ? `Read: ${rawPreview}` : null,
+      ].filter(Boolean).join('\n'),
+    };
+  }
+
   if (secondaries.length < 2) {
     const shellOnly = evaluateSliceMod({
       chars: DECODED_CHARS,
@@ -84,16 +115,12 @@ export function buildOverlayRecommendation(parsed, options = {}) {
       .join(', ');
     const shell = [modSet || null, shape, primary].filter(Boolean).join(' • ');
 
-    const hiddenNote = hiddenEntries.length
-      ? `Level this mod to 12 and rescan for slice advice (${hiddenEntries.length} hidden secondary reveals at lvl ${Math.max(...hiddenEntries.map(h => h.revealLevel || 12))}).`
-      : 'Need at least 2 clear secondaries for slice value.';
-
     return {
-      title: hiddenEntries.length ? 'Level Mod First' : 'Shell Match Found',
+      title: 'Shell Match Found',
       body: [
         shell,
         likelyUsers ? `Likely users: ${likelyUsers}` : 'No strong shell users found yet.',
-        hiddenNote,
+        'Need at least 2 clear secondaries for slice value.',
         rawPreview ? `Read: ${rawPreview}` : null,
       ].filter(Boolean).join('\n'),
     };
@@ -169,15 +196,15 @@ export function buildOverlayRecommendations(parsed, options = {}) {
 
   const sliceTitle = noUsers
     ? 'SELL'
-    : hasHidden && secondaries.length < 2
+    : hasHidden
       ? 'Level Mod First'
       : secondaries.length < 2
         ? 'Shell Match'
         : `${result.decision} ${result.finalScore}/100`;
   const sliceBody = noUsers
     ? [shell, 'No characters want this shell.'].filter(Boolean).join('\n')
-    : hasHidden && secondaries.length < 2
-      ? [shell, `Level this mod to ${Math.max(maxReveal, 12)} and rescan for slice advice.`].filter(Boolean).join('\n')
+    : hasHidden
+      ? [shell, `Level this mod to 12 and rescan for slice advice. (${hiddenEntries.length} secondary${hiddenEntries.length > 1 ? ' stats reveal' : ' reveals'} at lvl ${[...new Set(hiddenEntries.map(h => h.revealLevel).filter(Boolean))].sort((a,b)=>a-b).join('/')}.)`].filter(Boolean).join('\n')
       : secondaries.length < 2
         ? [shell, 'Need 2+ clear secondaries for slice value.'].filter(Boolean).join('\n')
         : [
