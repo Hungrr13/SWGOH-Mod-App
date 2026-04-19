@@ -104,6 +104,15 @@ This is the current repo map after the cleanup pass. If you are not sure where t
 
 ## Recent changes (April 2026)
 
+### Set classifier: ZNCC template matching with peak-aware crop selection
+- Replaced the mask-based set-symbol classifier with zero-mean normalized cross-correlation (ZNCC) on raw grayscale templates. Booleanized 64×64 masks threw away too much information; fist (Tenacity) and crosshair (Potency) both collapsed into ambiguous blobs and misclassifications cycled through Potency → Health → Speed → Crit Dmg before ever resolving to the correct Tenacity.
+- `scoreBitmapAgainstRawTemplates(...)` in `ModIconClassifier.kt` resizes each training sample to 48×48, normalizes to zero mean / unit variance *only over an elliptical window mask* (profile-specific: triangle cy=0.62 rx=0.22 ry=0.20; arrow cy=0.52 rx=0.26 ry=0.22; generic cy=0.54 rx=0.26 ry=0.22), then correlates observed vs. stored template. The window excludes the silver frame, which is byte-identical across all sets and was otherwise dominating similarity (every pair scored 0.97+).
+- Softmax temperature raised from 8 to 20 to keep decisive peaks from getting washed out across the mixture.
+- Per-class aggregation uses a top-half average of ZNCC scores across crop variants; a byte-identical template match at raw=1.000 now decisively wins.
+- Outer icon-crop selection prefers the crop with the highest peak raw NCC (not the highest softmax-amplified score). Rationale: a well-aligned crop with raw=1.000 is more trustworthy than a poorly-aligned crop whose relative margin gets amplified by softmax. Added `peakRawConfidence` and `peakRawWinner` to `SetDetectionResult` so the outer loop can pick the right crop.
+- Raw-peak override inside `detectSet`: if `overallPeakRaw >= 0.55` and the peak-winning class differs from the aggregate winner by margin ≥ 0.05, the peak winner wins.
+- `preferredSetProfileFromOcr` in `ModOverlayCaptureService.kt` simplified to only hint `arrow` when primary is Speed — the old triangle/arrow hints keyed off primary-name text that overlapped with secondary stat text and produced false hints.
+
 ### Shape classifier: contour-driven is source of truth
 - `buildObservedSilhouetteEvaluation` in `ModIconClassifier.kt` now always prefers the contour-driven candidates (`outer`/`fallback`) over the dark-pixel cavity candidates (`inner`/`unguided`) when picking `bestGuided`.
 - Reason: shape should come from the rim outline, not the inner icon. Cavity masks get polluted by primary-icon dark elements that `fillInternalHoles` can't enclose (the mask blobs into a circle and scores Circle/Arrow on shapes that are clearly Triangle/Cross/Diamond etc.).
