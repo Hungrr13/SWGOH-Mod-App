@@ -45,6 +45,14 @@ function apiRelicToGame(apiRelic) {
   return n >= 2 ? n - 1 : 0;
 }
 
+function normalizeCombatType(raw) {
+  if (raw == null) return null;
+  const s = String(raw).toUpperCase();
+  if (s === '1' || s === 'CHARACTER') return 'CHARACTER';
+  if (s === '2' || s === 'SHIP') return 'SHIP';
+  return s;
+}
+
 function normalizeRoster(data, allyCode) {
   const units = Array.isArray(data?.units)
     ? data.units
@@ -63,7 +71,7 @@ function normalizeRoster(data, allyCode) {
       gearLevel: Number(d.gear_level ?? 0) || 0,
       relicTier: apiRelicToGame(d.relic_tier),
       isGL: !!d.is_galactic_legend,
-      combatType: d.combat_type || null,
+      combatType: normalizeCombatType(d.combat_type),
     };
   }
   return {
