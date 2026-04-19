@@ -5111,23 +5111,6 @@ class ModIconClassifier(private val context: Context) {
   private fun buildObservedSymbolMask(bitmap: Bitmap, profile: String = "generic"): BooleanArray {
     val scaled = Bitmap.createScaledBitmap(bitmap, setSymbolSize, setSymbolSize, true)
     val mask = BooleanArray(setSymbolSize * setSymbolSize)
-
-    // Pre-pass: compute mean luminance in the central badge window so we can
-    // detect low-contrast symbols (e.g. dark purple fist on purple triangle)
-    // that fail every absolute-luminance test. Deviation from the local mean
-    // in either direction means foreground.
-    var lumaSum = 0L
-    var lumaCount = 0
-    for (y in 0 until setSymbolSize) {
-      for (x in 0 until setSymbolSize) {
-        if (!isWithinSetBadgeWindow(x, y, setSymbolSize)) continue
-        if (centerWeight(x, y, setSymbolSize) <= 0.16) continue
-        lumaSum += luminance(scaled.getPixel(x, y)).toLong()
-        lumaCount += 1
-      }
-    }
-    val meanLuma = if (lumaCount > 0) (lumaSum.toDouble() / lumaCount) else 128.0
-
     for (y in 0 until setSymbolSize) {
       for (x in 0 until setSymbolSize) {
         if (!isWithinSetBadgeWindow(x, y, setSymbolSize)) {
@@ -5143,13 +5126,11 @@ class ModIconClassifier(private val context: Context) {
         val saturatedSymbol = saturation > 0.14f && luminance > 54
         val contrastSymbol = edgeContrast > 16 && luminance > 42
         val darkEdgeSymbol = edgeContrast > 20 && luminance in 28..120
-        val lumaDeviation = kotlin.math.abs(luminance - meanLuma)
-        val adaptiveSymbol = lumaDeviation >= 22.0
         val centerWeight = centerWeight(x, y, setSymbolSize)
         mask[y * setSymbolSize + x] =
           alphaLike > 12 &&
           centerWeight > 0.16 &&
-          (brightSymbol || saturatedSymbol || contrastSymbol || darkEdgeSymbol || adaptiveSymbol)
+          (brightSymbol || saturatedSymbol || contrastSymbol || darkEdgeSymbol)
       }
     }
     scaled.recycle()
@@ -5174,14 +5155,10 @@ class ModIconClassifier(private val context: Context) {
         val sharpEdge = horizontalContrast > 16 || verticalContrast > 16
         val coloredSymbol = saturation > 0.12f && luma > 46
         val darkSharpEdge = (horizontalContrast > 20 || verticalContrast > 20) && luma > 24
-        // Low-contrast symbols (e.g. purple fist on purple triangle) need a
-        // gentler edge threshold — any noticeable local gradient counts as an
-        // edge regardless of absolute luminance.
-        val subtleEdge = horizontalContrast > 10 || verticalContrast > 10
         val centered = centerWeight(x, y, setSymbolSize) > 0.18
         mask[y * setSymbolSize + x] = centered && sharpEdge && (brightSymbol || coloredSymbol)
         if (!mask[y * setSymbolSize + x] && centered) {
-          mask[y * setSymbolSize + x] = darkSharpEdge || subtleEdge
+          mask[y * setSymbolSize + x] = darkSharpEdge
         }
       }
     }
