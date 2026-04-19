@@ -19,7 +19,7 @@
 // Defaults to Tosche Station's public worker so the feature works without
 // deploying our own. Swap to your own worker via setRosterApiBase() once
 // tools/roster-worker is deployed.
-const DEFAULT_API_BASE = 'https://tosche-station-api.alexholland1987.workers.dev/?allycode=';
+const DEFAULT_API_BASE = 'https://swgoh-roster-proxy.trash-receipt123.workers.dev/?allycode=';
 let API_BASE = DEFAULT_API_BASE;
 
 export function setRosterApiBase(url) {

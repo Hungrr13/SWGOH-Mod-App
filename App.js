@@ -262,7 +262,7 @@ function AllyCodeModal({ visible, onClose }) {
               disabled={busy}
               activeOpacity={0.8}
             >
-              <Text style={styles.buttonText}>{busy ? 'Working…' : 'Load Roster'}</Text>
+              <Text style={styles.buttonText}>{busy ? 'Working…' : snapshot.hasRoster ? 'Refresh Roster' : 'Load Roster'}</Text>
             </TouchableOpacity>
             {snapshot.hasRoster ? (
               <TouchableOpacity
