@@ -5112,24 +5112,21 @@ class ModIconClassifier(private val context: Context) {
     val scaled = Bitmap.createScaledBitmap(bitmap, setSymbolSize, setSymbolSize, true)
     val mask = BooleanArray(setSymbolSize * setSymbolSize)
 
-    // Pre-pass: compute mean luminance over the badge body, excluding the
-    // bright silver chrome frame (luma > 155) and deep shadow (luma < 22).
-    // This lets us detect low-contrast symbols (dark fist on purple triangle)
-    // that fail every absolute-luminance test, without being skewed by the
-    // silver frame that borders every badge.
+    // Pre-pass: compute mean luminance in the central badge window so we can
+    // detect low-contrast symbols (e.g. dark purple fist on purple triangle)
+    // that fail every absolute-luminance test. Deviation from the local mean
+    // in either direction means foreground.
     var lumaSum = 0L
     var lumaCount = 0
     for (y in 0 until setSymbolSize) {
       for (x in 0 until setSymbolSize) {
         if (!isWithinSetBadgeWindow(x, y, setSymbolSize)) continue
         if (centerWeight(x, y, setSymbolSize) <= 0.16) continue
-        val luma = luminance(scaled.getPixel(x, y))
-        if (luma < 22 || luma > 155) continue
-        lumaSum += luma.toLong()
+        lumaSum += luminance(scaled.getPixel(x, y)).toLong()
         lumaCount += 1
       }
     }
-    val meanLuma = if (lumaCount > 20) (lumaSum.toDouble() / lumaCount) else -1.0
+    val meanLuma = if (lumaCount > 0) (lumaSum.toDouble() / lumaCount) else 128.0
 
     for (y in 0 until setSymbolSize) {
       for (x in 0 until setSymbolSize) {
@@ -5146,12 +5143,8 @@ class ModIconClassifier(private val context: Context) {
         val saturatedSymbol = saturation > 0.14f && luminance > 54
         val contrastSymbol = edgeContrast > 16 && luminance > 42
         val darkEdgeSymbol = edgeContrast > 20 && luminance in 28..120
-        // Adaptive pass: only applies to the mid-luma body (skip silver frame
-        // and near-black). Marks pixels that sit well below the body mean
-        // (dark symbol on colored background).
-        val adaptiveSymbol = meanLuma > 0 &&
-          luminance in 22..155 &&
-          (meanLuma - luminance) >= 18.0
+        val lumaDeviation = kotlin.math.abs(luminance - meanLuma)
+        val adaptiveSymbol = lumaDeviation >= 22.0
         val centerWeight = centerWeight(x, y, setSymbolSize)
         mask[y * setSymbolSize + x] =
           alphaLike > 12 &&
