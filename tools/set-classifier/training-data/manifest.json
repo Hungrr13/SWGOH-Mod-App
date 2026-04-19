@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-19T17:21:33.277Z",
+  "generatedAt": "2026-04-19T17:25:04.154Z",
   "sourceDir": "tools\\set-classifier\\debug-crops",
   "labelsPath": "tools\\set-classifier\\debug-crops\\set-labels.json",
   "samples": [
@@ -820,28 +820,20 @@
       "relativePath": "triangle/tenacity/1776601446918-set-tenacity.png"
     },
     {
-      "file": "Triangle Sets/1776617145410-set-offense.png",
-      "set": "Offense",
-      "profile": "triangle",
-      "notes": "",
-      "source": "Triangle Sets/1776617145410-set-offense.png",
-      "relativePath": "triangle/offense/1776617145410-set-offense.png"
-    },
-    {
-      "file": "Triangle Sets/1776616985375-set-tenacity.png",
+      "file": "Triangle Sets/1776617145410-set-tenacity.png",
       "set": "Tenacity",
       "profile": "triangle",
       "notes": "",
-      "source": "Triangle Sets/1776616985375-set-tenacity.png",
-      "relativePath": "triangle/tenacity/1776616985375-set-tenacity.png"
+      "source": "Triangle Sets/1776617145410-set-tenacity.png",
+      "relativePath": "triangle/tenacity/1776617145410-set-tenacity.png"
     },
     {
-      "file": "Triangle Sets/1776618961857-set-offense.png",
-      "set": "Offense",
+      "file": "Triangle Sets/1776618961857-set-tenacity.png",
+      "set": "Tenacity",
       "profile": "triangle",
       "notes": "",
-      "source": "Triangle Sets/1776618961857-set-offense.png",
-      "relativePath": "triangle/offense/1776618961857-set-offense.png"
+      "source": "Triangle Sets/1776618961857-set-tenacity.png",
+      "relativePath": "triangle/tenacity/1776618961857-set-tenacity.png"
     }
   ]
 }

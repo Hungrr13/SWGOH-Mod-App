@@ -5710,7 +5710,6 @@ class ModIconClassifier(private val context: Context) {
       "Health" -> healthSetGeometryBonus(mask, dimension)
       "Offense" -> offenseSetGeometryBonus(mask, dimension)
       "Crit Dmg" -> critDamageSetGeometryBonus(mask, dimension)
-      "Tenacity" -> tenacitySetGeometryBonus(mask, dimension)
       else -> 0.0
     }
   }
@@ -6744,32 +6743,12 @@ class ModIconClassifier(private val context: Context) {
     val horizontal = rowActiveCount(mask, dimension, centerY).toDouble() / max(1, dimension).toDouble()
     val mainDiagonal = mainDiagonalProfile(mask, dimension).average()
     val antiDiagonal = antiDiagonalProfile(mask, dimension).average()
-    val diagonalStrength = (mainDiagonal + antiDiagonal) / 2.0
     val cornerDensity = averageCornerDensity(mask, dimension)
 
     var bonus = 0.0
-    // Require diagonals alongside the cross — a pure plus (tenacity) has none.
-    if (vertical >= 0.20 && horizontal >= 0.20 && diagonalStrength >= 0.12) bonus += 0.045
+    if (vertical >= 0.20 && horizontal >= 0.20) bonus += 0.045
     if (mainDiagonal >= 0.16 || antiDiagonal >= 0.16) bonus += 0.020
     if (cornerDensity <= 0.10) bonus += 0.010
-    return bonus
-  }
-
-  private fun tenacitySetGeometryBonus(mask: BooleanArray, dimension: Int): Double {
-    val centerX = (dimension * 0.50f).toInt()
-    val centerY = (dimension * 0.50f).toInt()
-    val vertical = columnActiveCount(mask, dimension, centerX).toDouble() / max(1, dimension).toDouble()
-    val horizontal = rowActiveCount(mask, dimension, centerY).toDouble() / max(1, dimension).toDouble()
-    val mainDiagonal = mainDiagonalProfile(mask, dimension).average()
-    val antiDiagonal = antiDiagonalProfile(mask, dimension).average()
-    val diagonalStrength = (mainDiagonal + antiDiagonal) / 2.0
-    val cornerDensity = averageCornerDensity(mask, dimension)
-
-    var bonus = 0.0
-    // Plus sign: strong cross, weak diagonals, empty corners.
-    if (vertical >= 0.22 && horizontal >= 0.22) bonus += 0.035
-    if (diagonalStrength <= 0.11) bonus += 0.020
-    if (cornerDensity <= 0.08) bonus += 0.015
     return bonus
   }
 
