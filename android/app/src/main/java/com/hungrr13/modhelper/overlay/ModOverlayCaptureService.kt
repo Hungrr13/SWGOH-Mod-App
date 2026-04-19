@@ -1386,6 +1386,17 @@ class ModOverlayCaptureService : Service() {
       FileOutputStream(outputFile).use { stream ->
         bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
       }
+      if (label == "set" || label == "icon") {
+        try {
+          val externalDir = getExternalFilesDir(null)
+          if (externalDir != null) {
+            val externalFile = File(externalDir, "$label-debug-last.png")
+            FileOutputStream(externalFile).use { stream ->
+              bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+            }
+          }
+        } catch (_: Throwable) {}
+      }
       outputFile.absolutePath
     } catch (_: Exception) {
       null
@@ -1832,6 +1843,9 @@ class ModOverlayCaptureService : Service() {
       .setSmallIcon(R.mipmap.ic_launcher)
       .setOngoing(true)
       .setSilent(true)
+      // Tapping the notification body now stops the overlay directly — no
+      // need to expand the notification and hunt for the Close action button.
+      .setContentIntent(stopPendingIntent)
       .addAction(
         0,
         getString(R.string.mod_overlay_notification_stop_action),

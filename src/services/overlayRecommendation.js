@@ -6,7 +6,7 @@ import { evaluateSliceMod } from './sliceEngine';
 // Estimate a secondary's roll count from its numeric value when the (N)
 // prefix was missed by OCR. Returns null when the stat isn't in ROLL_DATA
 // or the value can't be parsed.
-function estimateRolls(stat, value, dotLevel = 5) {
+export function estimateRolls(stat, value, dotLevel = 5) {
   const data = ROLL_DATA[stat];
   if (!data) return null;
   const v = parseFloat(String(value ?? '').replace(/[^\d.]/g, ''));
@@ -113,7 +113,11 @@ export function buildOverlayRecommendation(parsed, options = {}) {
   const hiddenNote = hiddenEntries.length
     ? 'Level this mod to 12 and rescan for slice advice.'
     : null;
-  const needsLeveling = hiddenEntries.length > 0 || allSingleRoll;
+  // If the OCR saw a mod level >= 13, the mod has upgrade rolls even if the
+  // (N) prefix was missed — don't force a "needs leveling" verdict.
+  const modLevel = Number(parsed?.modLevel) || 0;
+  const treatAsMaxed = modLevel >= 13;
+  const needsLeveling = hiddenEntries.length > 0 || (!treatAsMaxed && allSingleRoll);
 
   if (needsLeveling) {
     const shellOnly = evaluateSliceMod({
@@ -243,7 +247,9 @@ export function buildOverlayRecommendations(parsed, options = {}) {
     .filter(s => Number.isFinite(s._rolls) && s._rolls > 0);
   const allSingleRollDual = visibleWithRollsDual.length >= 1
     && visibleWithRollsDual.every(s => s._rolls === 1);
-  const needsLevel = hasHidden || allSingleRollDual;
+  const modLevelDual = Number(parsed?.modLevel) || 0;
+  const treatAsMaxedDual = modLevelDual >= 13;
+  const needsLevel = hasHidden || (!treatAsMaxedDual && allSingleRollDual);
   const levelBody = hasHidden
     ? 'Level this mod to 12 and rescan for slice advice.'
     : 'Every visible secondary still at (1) — level the mod to 12 and rescan for slice advice.';

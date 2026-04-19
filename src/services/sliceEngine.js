@@ -355,7 +355,15 @@ function uniqueMatchesByName(matches) {
   return [...byName.values()];
 }
 
-function scoreMatchAgainstEnteredSecondaries(match, secondaries) {
+const PRIORITY_BAND_POINTS = [36, 28, 18, 10, 6, 4];
+const PRIORITY_BAND_TAIL = 2;
+
+function priorityBandPoints(idx) {
+  if (idx < 0) return 0;
+  return PRIORITY_BAND_POINTS[idx] ?? PRIORITY_BAND_TAIL;
+}
+
+function scoreMatchAgainstEnteredSecondaries(match, secondaries, selectedPrimary) {
   const focusMap = SEC_FOCUS[match.name] || {};
   const entered = secondaries
     .filter((s) => s && s.name && s.val !== "")
@@ -370,10 +378,7 @@ function scoreMatchAgainstEnteredSecondaries(match, secondaries) {
 
     if (idx !== -1) {
       alignedCount += 1;
-      if (idx === 0) secondaryScore += 36;
-      else if (idx === 1) secondaryScore += 28;
-      else if (idx === 2) secondaryScore += 18;
-      else if (idx === 3) secondaryScore += 10;
+      secondaryScore += priorityBandPoints(idx);
 
       if (focus) {
         secondaryScore += focus.score * 0.35;
@@ -382,16 +387,34 @@ function scoreMatchAgainstEnteredSecondaries(match, secondaries) {
       continue;
     }
 
-    // Only give tiny tie-breaker credit for strong exported signal when it is
-    // not in the top-4 recommendation, so background stats do not dominate.
-    if (focus && focus.score >= 55) {
-      secondaryScore += 4;
+    // Off-priority stats: scale contribution by meta usage (focus.score) so
+    // characters with strong but uncurated stat signals still get credit. Cap
+    // well below in-priority band points so background stats can't dominate.
+    if (focus && focus.score > 0) {
+      secondaryScore += Math.min(focus.score * 0.12, 8);
+      if (focus.score >= 55) strongAlignedCount += 1;
+    }
+  }
+
+  // The mod's primary stat isn't in `secondaries`, but a character whose top
+  // priority matches that primary is a great fit for the mod — give them the
+  // same priority-band credit we give to aligned secondaries.
+  let primaryBonus = 0;
+  if (selectedPrimary) {
+    const normalizedPrimary = normalizeFocusStatName(selectedPrimary);
+    const pidx = match.priorityList.findIndex(
+      (priority) => normalizeFocusStatName(priority) === normalizedPrimary
+    );
+    if (pidx !== -1) {
+      primaryBonus = priorityBandPoints(pidx);
+      alignedCount += 1;
+      if (pidx <= 1) strongAlignedCount += 1;
     }
   }
 
   const avgSecondaryScore = entered.length ? secondaryScore / entered.length : 0;
   return {
-    score: (rankFitTier(match.fitTier) * 100) + avgSecondaryScore,
+    score: (rankFitTier(match.fitTier) * 100) + avgSecondaryScore + primaryBonus,
     alignedCount,
     strongAlignedCount,
   };
@@ -497,7 +520,34 @@ const FLAT_TO_PERCENT = {
 };
 const FLAT_TIEBREAKER_MULTIPLIER = 0.25;
 
-function scoreEnteredSecondaries({ enteredSecondaries, consensusProfile, sliceRef }) {
+// Equipping a set bonus amplifies the matching in-game stat (e.g. Speed set
+// gives +10% Speed). A secondary that aligns with the worn set is therefore
+// worth more on this mod than a generic version would be.
+const SET_AFFINITY_STATS = {
+  "Crit Dmg": ["Crit Dmg%"],
+  "Crit Chance": ["Crit Chance%"],
+  Offense: ["Offense", "Offense%"],
+  Speed: ["Speed"],
+  Health: ["Health", "Health%"],
+  Defense: ["Defense", "Defense%"],
+  Tenacity: ["Tenacity%"],
+  Potency: ["Potency%"],
+};
+const SET_AFFINITY_MULTIPLIER = 1.2;
+
+function getSetAffinityStats(modSet) {
+  const affinity = new Set();
+  if (!modSet) return affinity;
+  const reqs = parseSetRequirements(modSet);
+  for (const setName of Object.keys(reqs)) {
+    const stats = SET_AFFINITY_STATS[setName];
+    if (stats) stats.forEach((s) => affinity.add(s));
+  }
+  return affinity;
+}
+
+function scoreEnteredSecondaries({ enteredSecondaries, consensusProfile, sliceRef, modSet }) {
+  const affinityStats = getSetAffinityStats(modSet);
   const refMap = new Map(sliceRef.map((r) => [r.stat || r.s, r]));
   const scored = enteredSecondaries
     .filter((s) => s && s.name && s.val !== "")
@@ -507,9 +557,13 @@ function scoreEnteredSecondaries({ enteredSecondaries, consensusProfile, sliceRe
       // Flat stats can weakly support the matching % plan as a tie-breaker.
       const defaultWeight = isFlatTieBreaker ? 4 : 18;
       const baseWeight = consensusProfile.statWeights[matchedTarget] ?? defaultWeight;
-      const targetWeight = isFlatTieBreaker
+      const preAffinityWeight = isFlatTieBreaker
         ? baseWeight * FLAT_TIEBREAKER_MULTIPLIER
         : baseWeight;
+      const hasSetAffinity = affinityStats.has(s.name) || affinityStats.has(matchedTarget);
+      const targetWeight = hasSetAffinity
+        ? preAffinityWeight * SET_AFFINITY_MULTIPLIER
+        : preAffinityWeight;
       const quality = secondaryQuality(refMap, s.name, Number(s.val));
       const normalizedQuality = quality.pct * 100;
       const score = (targetWeight * 0.65) + (normalizedQuality * 0.35);
@@ -785,7 +839,7 @@ export function evaluateSliceMod({
   // are still premium and should remain a major slice driver.
   const enteredCount = secondaries.filter((s) => s && s.name && s.val !== "").length;
   const rankedMatches = uniqueCharacterMatches.map((m) => {
-    const ranking = scoreMatchAgainstEnteredSecondaries(m, secondaries);
+    const ranking = scoreMatchAgainstEnteredSecondaries(m, secondaries, selectedPrimary);
     return {
       ...m,
       matchScore: ranking.score,
@@ -818,6 +872,7 @@ export function evaluateSliceMod({
     enteredSecondaries: secondaries,
     consensusProfile: secConsensus,
     sliceRef,
+    modSet,
   });
   const upside = scoreUpside(secondary.scoredStats, { shape, primary: selectedPrimary });
   const contextRaw = scoreSynergy(secondary.scoredStats, consensus.dominantTags) - (secondary.deadCount * 12);

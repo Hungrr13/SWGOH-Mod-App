@@ -78,6 +78,8 @@ export default function OverlayCaptureScreen({ onBack, onUseInFinder, onUseInSli
   const autoSetupStarted = useRef(false);
   const swgohLaunchRetryRef = useRef(null);
   const appStateRef = useRef(AppState.currentState);
+  const pendingStartRef = useRef(false);
+  const startInFlightRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -118,6 +120,11 @@ export default function OverlayCaptureScreen({ onBack, onUseInFinder, onUseInSli
           ...currentStatus,
           ...warmedStatus,
         }));
+      }
+      // If the user went to Settings (e.g. to grant overlay permission) mid
+      // Start-Scanner flow, resume where we left off now that we're back.
+      if (pendingStartRef.current && !startInFlightRef.current) {
+        runStartFlow();
       }
     };
 
@@ -226,45 +233,82 @@ export default function OverlayCaptureScreen({ onBack, onUseInFinder, onUseInSli
     setBusyAction('');
   };
 
+  const runStartFlow = async () => {
+    if (startInFlightRef.current) return;
+    startInFlightRef.current = true;
+    pendingStartRef.current = true;
+    setBusyAction('floating');
+
+    try {
+      let nextStatus = await getOverlayCaptureStatus();
+      setStatus(nextStatus);
+
+      if (!nextStatus.overlayPermissionGranted) {
+        nextStatus = await requestOverlayPermission();
+        setStatus(nextStatus);
+        if (!nextStatus.overlayPermissionGranted) {
+          // User hasn't granted yet. Leave pendingStartRef true so AppState
+          // listener resumes this flow when they come back from Settings.
+          return;
+        }
+      }
+
+      if (!nextStatus.screenCaptureReady) {
+        nextStatus = await requestScreenCapture();
+        setStatus(nextStatus);
+        // First-time grant: the projection service may take a moment to flip
+        // screenCaptureReady to true after the system dialog returns. Poll
+        // briefly so we don't bail early and force a second tap.
+        if (!nextStatus.screenCaptureReady) {
+          const captureWaitDelays = [150, 250, 400, 600, 800];
+          for (const delay of captureWaitDelays) {
+            await new Promise(resolve => setTimeout(resolve, delay));
+            nextStatus = await getOverlayCaptureStatus();
+            if (nextStatus.screenCaptureReady) break;
+          }
+          setStatus(nextStatus);
+          if (!nextStatus.screenCaptureReady) return;
+        }
+      }
+
+      nextStatus = await startFloatingButton();
+      setStatus(nextStatus);
+
+      // Wait for the bubble service to actually report running BEFORE leaving
+      // the app. Once SWGOH takes foreground, our JS loop gets paused, so any
+      // re-fire we tried to schedule wouldn't run until the user swapped back.
+      if (nextStatus.screenCaptureReady) {
+        const attachDelays = [120, 180, 220, 260, 300, 350, 400];
+        let retried = false;
+        for (const delay of attachDelays) {
+          if (nextStatus.floatingButtonRunning) break;
+          await new Promise(resolve => setTimeout(resolve, delay));
+          nextStatus = await getOverlayCaptureStatus();
+          if (!nextStatus.floatingButtonRunning && !retried && delay >= 260) {
+            retried = true;
+            nextStatus = await startFloatingButton();
+          }
+        }
+        setStatus(nextStatus);
+
+        pendingStartRef.current = false;
+        launchSwgoh();
+        swgohLaunchRetryRef.current = setTimeout(() => {
+          launchSwgoh();
+        }, 900);
+      }
+    } finally {
+      startInFlightRef.current = false;
+      setBusyAction('');
+    }
+  };
+
   const toggleFloatingButton = async () => {
     if (status.floatingButtonRunning) {
+      pendingStartRef.current = false;
       return runAction('floating', stopFloatingButton);
     }
-
-    setBusyAction('floating');
-    let nextStatus = await getOverlayCaptureStatus();
-
-    if (!nextStatus.overlayPermissionGranted) {
-      nextStatus = await requestOverlayPermission();
-      setStatus(nextStatus);
-      setBusyAction('');
-      return;
-    }
-
-    if (!nextStatus.screenCaptureReady) {
-      nextStatus = await requestScreenCapture();
-      setStatus(nextStatus);
-      if (!nextStatus.screenCaptureReady) {
-        setBusyAction('');
-        return;
-      }
-    }
-
-    nextStatus = await startFloatingButton();
-    if (
-      nextStatus.screenCaptureReady &&
-      !nextStatus.floatingButtonRunning
-    ) {
-      await new Promise(resolve => setTimeout(resolve, 450));
-      nextStatus = await startFloatingButton();
-    }
-    setStatus(nextStatus);
-    setBusyAction('');
-
-    await launchSwgoh();
-    swgohLaunchRetryRef.current = setTimeout(() => {
-      launchSwgoh();
-    }, 900);
+    await runStartFlow();
   };
 
   const analyzeLatestCapture = async () => {

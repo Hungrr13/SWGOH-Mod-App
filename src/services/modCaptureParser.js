@@ -307,27 +307,21 @@ function shapeSupportsPrimary(shape, primary) {
 }
 
 function chooseShape(detectedShape, inferredShape, primary, topShapeMatches = []) {
-  if (inferredShape && shapeSupportsPrimary(inferredShape, primary)) {
-    return inferredShape;
-  }
+  // The only primary that uniquely determines a shape is Speed → Arrow.
+  // Every other primary is ambiguous across shapes, so primary-based filtering
+  // only hurts accuracy when OCR misreads the primary. For all other cases
+  // trust the native classifier pipeline (detectedShape + topShapeMatches).
+  if (primary === 'Speed') return 'Arrow';
 
   const parsedMatches = parseTopMatches(topShapeMatches);
-  const supportedMatches = primary && primary !== 'Not found'
-    ? parsedMatches.filter(match => shapeSupportsPrimary(match.name, primary))
-    : parsedMatches;
-  const rankedSupportedShape = pickRankedMatch(
-    supportedMatches,
-    isUniquePrimary(primary)
-      ? { minimumScore: 0.14, minimumMargin: 0.008, strongScore: 0.20 }
-      : { minimumScore: 0.18, minimumMargin: 0.012, strongScore: 0.26 },
-  );
-
-  if (rankedSupportedShape) {
-    return rankedSupportedShape;
-  }
-  if (isUniquePrimary(primary) && shapeSupportsPrimary(detectedShape, primary)) return detectedShape;
-  if (shapeSupportsPrimary(inferredShape, primary)) return inferredShape;
-  if (shapeSupportsPrimary(detectedShape, primary)) return detectedShape;
+  const rankedShape = pickRankedMatch(parsedMatches, {
+    minimumScore: 0.16,
+    minimumMargin: 0.012,
+    strongScore: 0.24,
+  });
+  if (rankedShape) return rankedShape;
+  if (detectedShape && detectedShape !== 'Not found') return detectedShape;
+  if (inferredShape && inferredShape !== 'Not found') return inferredShape;
   return 'Not found';
 }
 
@@ -476,6 +470,32 @@ function extractSecondaries(lines, primary, fullText = '') {
     }
   }
 
+  // OCR often drops the trailing "%" on percentage secondaries, so a value
+  // like "+1.25% Offense" comes through as "+1.25 Offense" and gets routed
+  // to the flat stat. Promote back to the % variant when the numeric value
+  // is too small to be a plausible flat roll, or when it carries a decimal
+  // (flat rolls are integers for every affected stat).
+  const FLAT_MIN_PER_ROLL = {
+    Offense: 22,
+    Health: 200,
+    Protection: 400,
+  };
+  found.forEach(item => {
+    if (item.hidden || !item.stat || !item.value) return;
+    if (!(item.stat in FLAT_MIN_PER_ROLL) && item.stat !== 'Defense') return;
+    const raw = String(item.value);
+    const hasDecimal = raw.includes('.');
+    const num = parseFloat(raw.replace(/[^\d.]/g, ''));
+    if (!Number.isFinite(num)) return;
+    const flatMin = FLAT_MIN_PER_ROLL[item.stat];
+    const shouldPromote = hasDecimal
+      || (flatMin != null && num < flatMin)
+      || (item.stat === 'Defense' && num < 5);
+    if (!shouldPromote) return;
+    item.stat = `${item.stat}%`;
+    if (!raw.includes('%')) item.value = `${raw}%`;
+  });
+
   return found.slice(0, 4);
 }
 
@@ -525,6 +545,7 @@ function buildAnalysisResult({
   const ocrShape = findMatch(fullText, SHAPES) || 'Not found';
   const parsedShape = chooseShape(detectedShape || ocrShape, inferredShape, detectedPrimary, topShapeMatches);
   const secondaries = extractSecondaries(normalizedLines, detectedPrimary, fullText);
+  const modLevel = extractModLevel(fullText);
   const summary = summarizeParserState({
     modSet: parsedSet,
     modShape: parsedShape,
@@ -549,8 +570,28 @@ function buildAnalysisResult({
       modShape: parsedShape,
       primary: detectedPrimary,
       secondaries,
+      modLevel,
     },
   };
+}
+
+// OCR often renders the mod-level banner as "LEVEL 15", "Level 15", or
+// "Lvl. 15". Return the first 1–15 integer that follows any of those.
+function extractModLevel(text) {
+  if (!text) return null;
+  const patterns = [
+    /\blevel\s*\.?\s*(\d{1,2})\b/i,
+    /\blvl\s*\.?\s*(\d{1,2})\b/i,
+    /\bl[vil]{1,2}\s*\.?\s*(\d{1,2})\b/i,
+  ];
+  for (const p of patterns) {
+    const m = text.match(p);
+    if (m) {
+      const n = Number(m[1]);
+      if (n >= 1 && n <= 15) return n;
+    }
+  }
+  return null;
 }
 
 export async function analyzeCapturedMod(input) {

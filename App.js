@@ -551,12 +551,15 @@ function AppShell() {
               return { stat: '', value: '', rolls: '', hidden: true };
             }
             const rawVal = String(s?.value ?? '').replace(/[+%]/g, '').trim();
-            return {
-              stat: s?.stat && s.stat !== 'Not found' ? s.stat : '',
-              value: rawVal,
-              rolls: s?.rolls != null && s.rolls > 0 ? String(s.rolls) : '',
-              hidden: false,
-            };
+            const stat = s?.stat && s.stat !== 'Not found' ? s.stat : '';
+            let rolls = s?.rolls != null && s.rolls > 0 ? String(s.rolls) : '';
+            // If OCR missed the "(N)" prefix, estimate rolls from the value
+            // so the slice-tab roll pills populate instead of staying blank.
+            if (!rolls && stat && rawVal) {
+              const est = overlayRecommendation.estimateRolls(stat, rawVal);
+              if (est) rolls = String(est);
+            }
+            return { stat, value: rawVal, rolls, hidden: false };
           });
           setSlicePrefill({
             token: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,

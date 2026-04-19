@@ -239,6 +239,7 @@ class ModIconClassifier(private val context: Context) {
       observedContourOverlayBitmap = lastShapeContourOverlayBitmap,
       syntheticCandidateDebugs = lastSyntheticCandidateDebugs,
     )
+    dumpShapeDebug(lastShapeDebugText ?: "")
 
     val shapeDrivenProfiles = setProfilesForShape(bestShapeDetection.name)
     val setProfilesToEvaluate = (shapeDrivenProfiles + listOfNotNull(preferredSetProfile)).distinct()
@@ -248,17 +249,50 @@ class ModIconClassifier(private val context: Context) {
         if (iconBitmap != cardBitmap) iconBitmap.recycle()
       }
     } else {
+      try {
+        val outDir = context.getExternalFilesDir(null)
+        if (outDir != null) {
+          outDir.mkdirs()
+          java.io.File(outDir, "set-debug-last.txt").writeText("")
+        }
+      } catch (_: Throwable) {
+      }
       iconBitmaps.forEach { iconBitmap ->
         val setResult = detectSet(iconBitmap, setProfilesToEvaluate)
-        val preferByPeak = setResult.peakRawConfidence > bestSetDetection.peakRawConfidence + 0.05
-        val sameByPeak = kotlin.math.abs(setResult.peakRawConfidence - bestSetDetection.peakRawConfidence) <= 0.05
-        val preferByScore = setResult.score > bestSetDetection.score
-        if (preferByPeak || (sameByPeak && preferByScore)) {
+        // High-confidence override: only when peak is exceptional (>= 0.85).
+        // Lower thresholds (e.g. 0.79) can fire on a misleading crop where the
+        // model probability for the winner is moderate — in that range, a
+        // higher-scored alternative crop with model ~1.0 is more trustworthy.
+        val newHighConf = setResult.peakRawConfidence >= 0.85
+        val curHighConf = bestSetDetection.peakRawConfidence >= 0.85
+        val prefer = when {
+          newHighConf && !curHighConf -> true
+          !newHighConf && curHighConf -> false
+          newHighConf && curHighConf -> setResult.peakRawConfidence > bestSetDetection.peakRawConfidence
+          else -> {
+            val scoreDelta = setResult.score - bestSetDetection.score
+            scoreDelta > 0.02 ||
+              (kotlin.math.abs(scoreDelta) <= 0.02 &&
+                setResult.peakRawConfidence > bestSetDetection.peakRawConfidence)
+          }
+        }
+        if (prefer) {
           bestSetDetection = setResult
         }
         if (iconBitmap != cardBitmap) {
           iconBitmap.recycle()
         }
+      }
+    }
+
+    if (!skipSetDetection) {
+      try {
+        val outDir = context.getExternalFilesDir(null)
+        if (outDir != null) {
+          val setDebugFile = java.io.File(outDir, "set-debug-last.txt")
+          setDebugFile.appendText("\n===FINAL=== name=${bestSetDetection.name} score=${bestSetDetection.score} peakRaw=${bestSetDetection.peakRawConfidence}\n")
+        }
+      } catch (_: Throwable) {
       }
     }
 
@@ -380,6 +414,10 @@ class ModIconClassifier(private val context: Context) {
         debug.circleLooksDiamondish && (debug.scores["Diamond"] ?: 0.0) >= 0.35
       }
 
+    try {
+      Log.i("ModShapeDebug", "refineShapeSelection entry: name=${detection.name} smoothedCorners=${metrics.smoothedCornerCount} cornerCount=${metrics.cornerCount} dCorner=${geometry.diamondCornerScore} dDiag=${geometry.diamondDiagonalScore} triScore=${geometry.triangleScore}")
+    } catch (_: Throwable) {}
+
     val forcedName =
       when {
         detection.name == "Circle" &&
@@ -390,6 +428,15 @@ class ModIconClassifier(private val context: Context) {
           geometry.circularity >= 0.68 &&
           geometry.circularity <= 0.82 ->
           "Square"
+        // Must come before the Cross->Square rule: a rounded Diamond whose
+        // interior set symbol has strong center mass can score both Cross
+        // (centered vertical+horizontal arms) and Square (via maskOnlyLooksSquare)
+        // while still showing 4 strong diamond corners. Prefer Diamond when
+        // diamondCornerScore is high and the outline is roughly square-aspect.
+        detection.name in listOf("Cross", "Square") &&
+          geometry.diamondCornerScore >= 0.80 &&
+          geometry.aspectRatio in 0.92..1.10 ->
+          "Diamond"
         detection.name == "Cross" &&
           maskOnlyLooksSquare &&
           geometry.centerBarStrength <= 0.78 ->
@@ -400,12 +447,46 @@ class ModIconClassifier(private val context: Context) {
         detection.name == "Circle" &&
           anyCandidateLooksDiamond ->
           "Diamond"
+        // Rounded Diamonds (e.g. lens/petal) can trace a near-circular outer
+        // contour that scores Circle highly while still exposing 4 strong
+        // diamond corners in the geometry. Rescue to Diamond BEFORE the
+        // Circle->Triangle rule below, which also matches rounded shapes.
+        detection.name == "Circle" &&
+          geometry.diamondCornerScore >= 0.80 &&
+          geometry.aspectRatio in 0.92..1.12 ->
+          "Diamond"
         // A rounded diamond can score Cross highly because its centered mass
         // produces high centerBarStrength + orthogonal dominance. When a
         // guided candidate flags circleLooksDiamondish with a notable Diamond
         // score AND the geometry shows strong diamond corners, rescue it.
         detection.name == "Cross" &&
           anyCandidateLooksDiamond &&
+          geometry.diamondCornerScore >= 0.80 ->
+          "Diamond"
+        // A Diamond's interior set symbol can be boxy enough that the fallback
+        // candidate (which weighs interior mass) picks Cross, even though the
+        // silhouette has 4 corners and strong diagonal edges. If the geometry
+        // gives clear diamond-diagonal + diamond-corner evidence AND the outer
+        // outline has ~4 corners, override Cross to Diamond.
+        detection.name == "Cross" &&
+          geometry.diamondDiagonalScore >= 0.70 &&
+          geometry.diamondCornerScore >= 0.55 &&
+          (metrics.smoothedCornerCount == 4 || metrics.cornerCount in 3..5) ->
+          "Diamond"
+        // Triangle has 3 corners; Diamond has 4. If Triangle won but the
+        // outline has 4 corners AND strong diamond geometry, that's a
+        // misread Diamond.
+        detection.name == "Triangle" &&
+          metrics.smoothedCornerCount == 4 &&
+          geometry.diamondDiagonalScore >= 0.65 &&
+          geometry.diamondCornerScore >= 0.55 ->
+          "Diamond"
+        // Rounded Diamonds can smooth down to 3 corners, defeating the
+        // corner-count check above. If diamondCornerScore is very strong on
+        // its own — a signature of 4 diamond corners even when the outline
+        // smooths — override Triangle to Diamond.
+        detection.name == "Triangle" &&
+          metrics.smoothedCornerCount in 3..5 &&
           geometry.diamondCornerScore >= 0.80 ->
           "Diamond"
         detection.name in listOf("Circle", "Diamond") &&
@@ -429,6 +510,10 @@ class ModIconClassifier(private val context: Context) {
       }
 
     if (forcedName == null) return detection
+
+    try {
+      Log.i("ModShapeDebug", "forcedName fired: ${detection.name} -> $forcedName (smoothedCorners=${metrics.smoothedCornerCount}, dCorner=${geometry.diamondCornerScore}, dDiag=${geometry.diamondDiagonalScore})")
+    } catch (_: Throwable) {}
 
     val forcedTop = detection.topMatches.toMutableList()
     val existingForced = forcedTop.firstOrNull { it.name == forcedName }?.score ?: (detection.score + 0.05)
@@ -3689,6 +3774,7 @@ class ModIconClassifier(private val context: Context) {
     val rawPeakPerClass: MutableMap<String, Double> = mutableMapOf()
     var overallPeakRaw = 0.0
     var overallPeakRawWinner: String? = null
+    val setDebugAccum = StringBuilder()
 
     profilesToEvaluate.forEach { profile ->
       cropSetSymbolVariants(iconBitmap, profile).forEach { symbolBitmap ->
@@ -3883,11 +3969,17 @@ class ModIconClassifier(private val context: Context) {
 
         val sortedMatches = scoredMatches.sortedByDescending { it.score }
         Log.d(TAG, "setScore profile=$profile --- breakdown ---")
+        setDebugAccum.append("profile=").append(profile).append(" rawPeak=").append(rawTemplateResult.peakWinner)
+          .append(':').append(String.format(java.util.Locale.US, "%.3f", rawTemplateResult.peakRaw))
+          .append(" margin=").append(String.format(java.util.Locale.US, "%.3f", rawTemplateResult.peakMargin)).append('\n')
         scoreBreakdown
           .sortedByDescending { line ->
             Regex("final=([-\\d.]+)").find(line)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
           }
-          .forEach { Log.d(TAG, "setScore $it") }
+          .forEach {
+            Log.d(TAG, "setScore $it")
+            setDebugAccum.append(it).append('\n')
+          }
         scoredMatches.forEach { match ->
           val baseName = match.name.substringBefore(" [")
           classScoreAccumulator.getOrPut(baseName) { mutableListOf() }.add(match.score)
@@ -4014,6 +4106,17 @@ class ModIconClassifier(private val context: Context) {
       if (debugObservation != null) {
         lastArrowBurstObservation = debugObservation
       }
+    }
+
+    try {
+      val outDir = context.getExternalFilesDir(null)
+      if (outDir != null) {
+        outDir.mkdirs()
+        val setDebugFile = java.io.File(outDir, "set-debug-last.txt")
+        val header = "===detectSet call=== timestamp=${System.currentTimeMillis()}\nwinner=${bestResult.name}\nscore=${bestResult.score}\npeakRaw=${bestResult.peakRawConfidence}\npeakRawWinner=${bestResult.peakRawWinner}\n"
+        setDebugFile.appendText(header + setDebugAccum.toString())
+      }
+    } catch (_: Throwable) {
     }
 
     return bestResult
@@ -4258,6 +4361,28 @@ class ModIconClassifier(private val context: Context) {
     }
   }
 
+  // Emit the full per-shape debug block to logcat AND a public file we can
+  // pull over adb without `run-as` (release builds aren't debuggable, so the
+  // private files dir is unreadable). Tag "ModShapeDebug" for logcat filter.
+  private fun dumpShapeDebug(debugText: String) {
+    if (debugText.isBlank()) return
+    val stamp = System.currentTimeMillis()
+    try {
+      debugText.lineSequence().forEach { line ->
+        if (line.isNotBlank()) Log.i("ModShapeDebug", line)
+      }
+      Log.i("ModShapeDebug", "---end $stamp---")
+    } catch (_: Throwable) {
+    }
+    try {
+      val outDir = context.getExternalFilesDir(null) ?: return
+      outDir.mkdirs()
+      val file = java.io.File(outDir, "shape-debug-last.txt")
+      file.writeText("timestamp=$stamp\n$debugText")
+    } catch (_: Throwable) {
+    }
+  }
+
   private fun cropSetSymbolRegion(iconBitmap: Bitmap, leftRatio: Float, topRatio: Float, widthRatio: Float, heightRatio: Float): Bitmap {
     val width = iconBitmap.width
     val height = iconBitmap.height
@@ -4285,7 +4410,6 @@ class ModIconClassifier(private val context: Context) {
       else -> listOf(
         floatArrayOf(0.18f, 0.39f, 0.28f, 0.28f),
         floatArrayOf(0.17f, 0.37f, 0.30f, 0.30f),
-        floatArrayOf(0.20f, 0.41f, 0.26f, 0.26f),
         floatArrayOf(0.15f, 0.36f, 0.32f, 0.32f),
       )
     }
@@ -5378,39 +5502,82 @@ class ModIconClassifier(private val context: Context) {
   private fun buildObservedSymbolMask(bitmap: Bitmap, profile: String = "generic"): BooleanArray {
     val scaled = Bitmap.createScaledBitmap(bitmap, setSymbolSize, setSymbolSize, true)
     val mask = BooleanArray(setSymbolSize * setSymbolSize)
-    val polarity = sampleCenterPolarity(scaled)
+
+    val lumaGrid = DoubleArray(setSymbolSize * setSymbolSize)
+    val satGrid = FloatArray(setSymbolSize * setSymbolSize)
+    val alphaGrid = IntArray(setSymbolSize * setSymbolSize)
+    val inWindow = BooleanArray(setSymbolSize * setSymbolSize)
+    val windowLumas = ArrayList<Double>(setSymbolSize * setSymbolSize)
+    val windowSats = ArrayList<Float>(setSymbolSize * setSymbolSize)
+    var centerSum = 0.0
+    var centerCount = 0
+
     for (y in 0 until setSymbolSize) {
       for (x in 0 until setSymbolSize) {
-        if (!isWithinSetBadgeWindow(x, y, setSymbolSize)) {
-          mask[y * setSymbolSize + x] = false
-          continue
-        }
+        val idx = y * setSymbolSize + x
         val color = scaled.getPixel(x, y)
-        val luminance = luminance(color)
-        val saturation = saturation(color)
-        val alphaLike = Color.alpha(color)
-        val edgeContrast = localEdgeContrast(scaled, x, y, setSymbolSize)
-        val centerWeight = centerWeight(x, y, setSymbolSize)
-        val marked = if (polarity.inverted) {
-          val tightlyCentered = centerWeight > 0.32
-          val darkSymbol = luminance < polarity.centerLuma - 28 &&
-            luminance > 6 &&
-            saturation < 0.32f
-          val edgeSymbol = edgeContrast > 18 &&
-            luminance < polarity.centerLuma - 12 &&
-            saturation < 0.38f
-          tightlyCentered && (darkSymbol || edgeSymbol)
+        val l = luminance(color).toDouble()
+        lumaGrid[idx] = l
+        satGrid[idx] = saturation(color)
+        alphaGrid[idx] = Color.alpha(color)
+        val within = isWithinSetBadgeWindow(x, y, setSymbolSize)
+        inWindow[idx] = within
+        if (within) {
+          windowLumas.add(l)
+          windowSats.add(satGrid[idx])
+          if (centerWeight(x, y, setSymbolSize) > 0.55) {
+            centerSum += l
+            centerCount += 1
+          }
+        }
+      }
+    }
+
+    if (windowLumas.isEmpty()) {
+      scaled.recycle()
+      return normalizeSetSymbolMask(mask, setSymbolSize, profile)
+    }
+
+    val sortedLuma = windowLumas.sorted()
+    val median = sortedLuma[sortedLuma.size / 2]
+    val madValues = ArrayList<Double>(sortedLuma.size)
+    for (v in sortedLuma) madValues.add(kotlin.math.abs(v - median))
+    madValues.sort()
+    val mad = madValues[madValues.size / 2].coerceAtLeast(3.0)
+
+    val sortedSat = windowSats.sorted()
+    val satMedian = sortedSat[sortedSat.size / 2]
+
+    val centerLuma = if (centerCount > 0) centerSum / centerCount else median
+    val inverted = centerLuma < median - mad * 0.4
+
+    val lumaDelta = (mad * 1.5).coerceIn(10.0, 40.0)
+    val satDelta = (satMedian + 0.10f).coerceAtLeast(0.14f)
+
+    for (y in 0 until setSymbolSize) {
+      for (x in 0 until setSymbolSize) {
+        val idx = y * setSymbolSize + x
+        if (!inWindow[idx]) continue
+        val cw = centerWeight(x, y, setSymbolSize)
+        if (cw <= 0.16) continue
+        if (alphaGrid[idx] <= 12) continue
+
+        val l = lumaGrid[idx]
+        val sat = satGrid[idx]
+        val edge = localEdgeContrast(scaled, x, y, setSymbolSize)
+        val deviation = l - median
+        val marked = if (inverted) {
+          val darkSymbol = deviation < -lumaDelta && l > 6
+          val edgeSymbol = edge > 18 && deviation < -lumaDelta * 0.5
+          darkSymbol || edgeSymbol
         } else {
-          val brightSymbol = luminance > 92
-          val saturatedSymbol = saturation > 0.14f && luminance > 54
-          val contrastSymbol = edgeContrast > 16 && luminance > 42
-          val darkEdgeSymbol = edgeContrast > 20 && luminance in 28..120
+          val brightSymbol = deviation > lumaDelta
+          val saturatedSymbol = sat > satDelta && deviation > lumaDelta * 0.35
+          val contrastSymbol = edge > 16 && deviation > lumaDelta * 0.25
+          val darkEdgeSymbol = edge > 20 && kotlin.math.abs(deviation) > lumaDelta * 0.5
           brightSymbol || saturatedSymbol || contrastSymbol || darkEdgeSymbol
         }
-        mask[y * setSymbolSize + x] =
-          alphaLike > 12 &&
-          centerWeight > 0.16 &&
-          marked
+        mask[idx] = marked
       }
     }
     scaled.recycle()
@@ -5420,36 +5587,55 @@ class ModIconClassifier(private val context: Context) {
   private fun buildObservedSymbolEdgeMask(bitmap: Bitmap, profile: String = "generic"): BooleanArray {
     val scaled = Bitmap.createScaledBitmap(bitmap, setSymbolSize, setSymbolSize, true)
     val mask = BooleanArray(setSymbolSize * setSymbolSize)
-    val polarity = sampleCenterPolarity(scaled)
+
+    val windowLumas = ArrayList<Double>(setSymbolSize * setSymbolSize)
+    var centerSum = 0.0
+    var centerCount = 0
+    for (y in 0 until setSymbolSize) {
+      for (x in 0 until setSymbolSize) {
+        if (!isWithinSetBadgeWindow(x, y, setSymbolSize)) continue
+        val l = luminance(scaled.getPixel(x, y)).toDouble()
+        windowLumas.add(l)
+        if (centerWeight(x, y, setSymbolSize) > 0.55) {
+          centerSum += l
+          centerCount += 1
+        }
+      }
+    }
+    if (windowLumas.isEmpty()) {
+      scaled.recycle()
+      return normalizeSetSymbolMask(mask, setSymbolSize, profile)
+    }
+    val sortedLuma = windowLumas.sorted()
+    val median = sortedLuma[sortedLuma.size / 2]
+    val madValues = ArrayList<Double>(sortedLuma.size)
+    for (v in sortedLuma) madValues.add(kotlin.math.abs(v - median))
+    madValues.sort()
+    val mad = madValues[madValues.size / 2].coerceAtLeast(3.0)
+    val centerLuma = if (centerCount > 0) centerSum / centerCount else median
+    val inverted = centerLuma < median - mad * 0.4
+    val lumaDelta = (mad * 1.5).coerceIn(10.0, 40.0)
+
     for (y in 1 until setSymbolSize - 1) {
       for (x in 1 until setSymbolSize - 1) {
-        if (!isWithinSetBadgeWindow(x, y, setSymbolSize)) {
-          mask[y * setSymbolSize + x] = false
-          continue
-        }
+        if (!isWithinSetBadgeWindow(x, y, setSymbolSize)) continue
         val color = scaled.getPixel(x, y)
-        val luma = luminance(color)
-        val horizontalContrast = kotlin.math.abs(luma - luminance(scaled.getPixel(x + 1, y)))
-        val verticalContrast = kotlin.math.abs(luma - luminance(scaled.getPixel(x, y + 1)))
+        val luma = luminance(color).toDouble()
+        val horizontalContrast = kotlin.math.abs(luma - luminance(scaled.getPixel(x + 1, y)).toDouble())
+        val verticalContrast = kotlin.math.abs(luma - luminance(scaled.getPixel(x, y + 1)).toDouble())
         val saturation = saturation(color)
-        val centered = centerWeight(x, y, setSymbolSize) > 0.18
-        if (!centered) {
-          mask[y * setSymbolSize + x] = false
-          continue
-        }
-        mask[y * setSymbolSize + x] = if (polarity.inverted) {
-          val tightlyCentered = centerWeight(x, y, setSymbolSize) > 0.32
-          val darkSymbol = luma < polarity.centerLuma - 28 &&
-            luma > 6 &&
-            saturation < 0.32f
-          val sharpEdge = horizontalContrast > 18 || verticalContrast > 18
-          val edgeDark = luma < polarity.centerLuma - 12 && saturation < 0.38f
-          tightlyCentered && (darkSymbol || (sharpEdge && edgeDark))
+        val cw = centerWeight(x, y, setSymbolSize)
+        if (cw <= 0.18) continue
+        val deviation = luma - median
+        val sharpEdge = horizontalContrast > 16 || verticalContrast > 16
+        mask[y * setSymbolSize + x] = if (inverted) {
+          val darkSymbol = deviation < -lumaDelta && luma > 6
+          val edgeDark = sharpEdge && deviation < -lumaDelta * 0.5
+          darkSymbol || edgeDark
         } else {
-          val brightSymbol = luma > 62
-          val sharpEdge = horizontalContrast > 16 || verticalContrast > 16
-          val coloredSymbol = saturation > 0.12f && luma > 46
-          val darkSharpEdge = (horizontalContrast > 20 || verticalContrast > 20) && luma > 24
+          val brightSymbol = deviation > lumaDelta
+          val coloredSymbol = saturation > 0.12f && deviation > lumaDelta * 0.3
+          val darkSharpEdge = (horizontalContrast > 20 || verticalContrast > 20) && kotlin.math.abs(deviation) > lumaDelta * 0.4
           (sharpEdge && (brightSymbol || coloredSymbol)) || darkSharpEdge
         }
       }
@@ -7109,6 +7295,24 @@ class ModIconClassifier(private val context: Context) {
       )
     }
 
+    // Mask-masked gray statistics: restrict gray average/spread to pixels
+    // inside the primary symbol mask. This strips background-color bias
+    // (teal vs orange vs red) from the feature vector while keeping useful
+    // information about the symbol's internal luminance variation.
+    var maskedSum = 0.0
+    var maskedSumSq = 0.0
+    var maskedCount = 0
+    for (index in gray.indices) {
+      if (!primaryMask[index]) continue
+      val v = gray[index].toDouble() / 255.0
+      maskedSum += v
+      maskedSumSq += v * v
+      maskedCount += 1
+    }
+    val maskedMean = if (maskedCount > 0) maskedSum / maskedCount else 0.0
+    val maskedVar = if (maskedCount > 0) (maskedSumSq / maskedCount) - (maskedMean * maskedMean) else 0.0
+    val maskedStd = if (maskedVar > 0.0) sqrt(maskedVar) else 0.0
+
     val values = ArrayList<Double>(featureProfile.size + 14)
     featureProfile.forEach(values::add)
     values += primaryOccupancy
@@ -7121,8 +7325,8 @@ class ModIconClassifier(private val context: Context) {
     values += columnProfile.average()
     values += edgeRowProfile.average()
     values += edgeColumnProfile.average()
-    values += grayAverage
-    values += graySpread
+    values += maskedMean
+    values += maskedStd
     values += normalizedTransitions(rowTransitions(primaryMask, dimension, (dimension * 0.50f).toInt()), dimension)
     values += normalizedTransitions(columnTransitions(primaryMask, dimension, (dimension * 0.50f).toInt()), dimension)
     return values.toDoubleArray()

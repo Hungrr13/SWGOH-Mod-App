@@ -409,16 +409,7 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
         {/* ── Engine Analysis ── */}
         {result && (
           <>
-            {/* Tier action */}
-            {result.tierAction && (
-              <View style={[styles.verdictCard, { borderColor: result.tierAction.actionColor }]}>
-                <Text style={[styles.verdictLabel, { color: result.tierAction.actionColor }]}>
-                  {result.tierAction.actionLabel}
-                </Text>
-                <Text style={styles.verdictScore}>Current tier: {tier}</Text>
-                <Text style={styles.verdictMeaning}>{result.tierAction.actionDesc}</Text>
-              </View>
-            )}
+            {/* Tier action card intentionally removed — the Decision card below is the single verdict. */}
 
             {/* Decision */}
             <View style={[styles.verdictCard, { borderColor: decisionColor(result.decision) }]}>
