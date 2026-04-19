@@ -5146,35 +5146,30 @@ class ModIconClassifier(private val context: Context) {
     else 0.0
 
     if (coverage < 0.10) {
-      // Fallback: compute the body-mean luminance (excluding the silver chrome
-      // frame and deep shadow) and mark any pixel noticeably darker than the
-      // mean that also shows local contrast — i.e. the symbol outline.
-      var lumaSum = 0L
-      var lumaCount = 0
-      for (y in 0 until setSymbolSize) {
-        for (x in 0 until setSymbolSize) {
+      // Fallback for low-contrast symbols (dark fist on purple triangle etc.).
+      // The absolute-threshold tests miss these, but the local-gradient edge
+      // detector still resolves the symbol outline. Build an edge-only mask
+      // and morphologically close + flood-fill it to approximate the solid
+      // symbol shape, then use it as the primary mask.
+      val edgeFallback = BooleanArray(setSymbolSize * setSymbolSize)
+      for (y in 1 until setSymbolSize - 1) {
+        for (x in 1 until setSymbolSize - 1) {
           if (!isWithinSetBadgeWindow(x, y, setSymbolSize)) continue
-          if (centerWeight(x, y, setSymbolSize) <= 0.16) continue
-          val luma = luminance(scaled.getPixel(x, y))
-          if (luma < 24 || luma > 140) continue
-          lumaSum += luma.toLong()
-          lumaCount += 1
+          if (centerWeight(x, y, setSymbolSize) <= 0.18) continue
+          val here = luminance(scaled.getPixel(x, y))
+          if (here > 160) continue
+          val horiz = kotlin.math.abs(here - luminance(scaled.getPixel(x + 1, y)))
+          val vert = kotlin.math.abs(here - luminance(scaled.getPixel(x, y + 1)))
+          if (horiz > 10 || vert > 10) {
+            edgeFallback[y * setSymbolSize + x] = true
+          }
         }
       }
-      if (lumaCount > 30) {
-        val meanLuma = lumaSum.toDouble() / lumaCount
-        for (y in 0 until setSymbolSize) {
-          for (x in 0 until setSymbolSize) {
-            if (!isWithinSetBadgeWindow(x, y, setSymbolSize)) continue
-            if (centerWeight(x, y, setSymbolSize) <= 0.18) continue
-            if (mask[y * setSymbolSize + x]) continue
-            val color = scaled.getPixel(x, y)
-            val luminance = luminance(color)
-            if (luminance !in 22..140) continue
-            val edgeContrast = localEdgeContrast(scaled, x, y, setSymbolSize)
-            if ((meanLuma - luminance) >= 20.0 && edgeContrast > 6) {
-              mask[y * setSymbolSize + x] = true
-            }
+      val closed = closeMask(edgeFallback, setSymbolSize, 2)
+      for (y in 0 until setSymbolSize) {
+        for (x in 0 until setSymbolSize) {
+          if (closed[y * setSymbolSize + x]) {
+            mask[y * setSymbolSize + x] = true
           }
         }
       }
