@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View, Text, TouchableOpacity, Modal, FlatList, StyleSheet,
 } from 'react-native';
+import { useAppTheme } from '../theme/appTheme';
 
 export default function CustomPicker({ selectedValue, onValueChange, items, style }) {
   const [open, setOpen] = useState(false);
+  const theme = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const selected = items.find(i => i.value === selectedValue);
 
   return (
@@ -50,33 +53,33 @@ export default function CustomPicker({ selectedValue, onValueChange, items, styl
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = colors => StyleSheet.create({
   trigger: {
     height: 44,
-    backgroundColor: '#0d1520',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#1e2a3a',
+    borderColor: colors.border,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
     justifyContent: 'space-between',
     marginBottom: 4,
   },
-  triggerText: { color: '#e2e8f0', fontSize: 14 },
-  placeholder: { color: '#475569' },
-  chevron: { color: '#94a3b8', fontSize: 16 },
+  triggerText: { color: colors.text, fontSize: 14 },
+  placeholder: { color: colors.soft },
+  chevron: { color: colors.muted, fontSize: 16 },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.65)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     padding: 24,
   },
   sheet: {
-    backgroundColor: '#111827',
+    backgroundColor: colors.surface,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#1e2a3a',
+    borderColor: colors.border,
     maxHeight: 420,
     overflow: 'hidden',
   },
@@ -84,9 +87,9 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e2a3a',
+    borderBottomColor: colors.border,
   },
-  itemActive: { backgroundColor: '#1a2535' },
-  itemText: { color: '#e2e8f0', fontSize: 14 },
-  itemTextActive: { color: '#f5a623', fontWeight: '700' },
+  itemActive: { backgroundColor: colors.surfaceAlt },
+  itemText: { color: colors.text, fontSize: 14 },
+  itemTextActive: { color: colors.primary, fontWeight: '700' },
 });

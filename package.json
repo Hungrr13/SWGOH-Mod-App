@@ -1,12 +1,18 @@
 {
   "name": "mods-swgoh",
   "version": "1.0.0",
-  "main": "node_modules/expo/AppEntry.js",
+  "main": "index.js",
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "export:set-dataset": "node tools/export-set-classifier-dataset.js",
+    "train:set-model": "node tools/train-set-classifier-model.js",
+    "refresh:secondaries": "node tools/refresh-secondary-focus.js",
+    "open:secondaries": "node tools/open-mod-source-best-mod-urls.js",
+    "build:abilities-urls": "node tools/build-mod-source-unit-urls.js",
+    "open:abilities": "node tools/open-mod-source-best-mod-urls.js --input references/mod-source/mod_source_unit_urls.txt"
   },
   "dependencies": {
     "@react-native-picker/picker": "2.11.1",

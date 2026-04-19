@@ -15,3 +15,31 @@ android/app/release/
 
 # Expo
 .expo/
+
+# Local-only reference datasets (HTML dumps, character data, overlay templates) — too large for git
+references/
+
+# Tool build/debug output
+tools/debug_out/
+
+# Claude worktrees live alongside the repo but are separate checkouts
+.claude/worktrees/
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# Ad-hoc debug artifacts dumped to repo root
+dbg-*.png
+tmp-*.png
+_dbg_*/
+_dbg_*.png
+_dbg_*.txt
+crop*.png
+outer*.png
+outer-mask*.png
+inner*.png
+inner-mask*.png
+observed-arrow*.png
+shape-crop*.png
+unguided*.png
+unguided-mask*.png
+

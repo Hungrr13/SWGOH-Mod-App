@@ -1,0 +1,22 @@
+{
+  "samples": [
+    {
+      "file": "Arrow Sets/1776212846702-set.png",
+      "set": "Health",
+      "profile": "arrow",
+      "notes": "Arrow slot sample"
+    },
+    {
+      "file": "Arrow Sets/1776213015184-set.png",
+      "set": "tenc",
+      "profile": "arrow",
+      "notes": "Short aliases work too"
+    },
+    {
+      "file": "Arrow Sets/1776212939296-set.png",
+      "set": "crit chance",
+      "profile": "arrow",
+      "notes": "Nested paths also work"
+    }
+  ]
+}

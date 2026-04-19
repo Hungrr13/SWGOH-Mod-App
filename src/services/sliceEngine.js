@@ -1,0 +1,740 @@
+import { SLICE_RULES } from './sliceRules';
+import { SEC_FOCUS } from '../data/secFocus';
+
+const FIXED_PRIMARY = {
+  Square: "Offense%",
+  Diamond: "Defense%",
+};
+
+const PRIMARY_ABBR_MAP = {
+  Sp: "Speed",
+  O: "Offense%",
+  H: "Health%",
+  P: "Protection%",
+  Ac: "Accuracy%",
+  CA: "Crit Avoidance%",
+  T: "Tenacity%",
+  CC: "Crit Chance%",
+  CD: "Crit Dmg%",
+  D: "Defense%",
+  Po: "Potency%",
+  "-": "Any",
+};
+
+const SET_NORMALIZERS = [
+  [/Speed\(x4\)/i, "Speed"],
+  [/Speed\(x3\)/i, "Speed"],
+  [/Offense\(x4\)/i, "Offense"],
+  [/Offense\(x3\)/i, "Offense"],
+  [/Crit Dmg\(x4\)/i, "Crit Dmg"],
+  [/Crit Dmg\(x3\)/i, "Crit Dmg"],
+  [/Crit Chance\(x2\)/i, "Crit Chance"],
+  [/Crit Chance\(x4\)/i, "Crit Chance"],
+  [/Crit Chance\(x3\)/i, "Crit Chance"],
+  [/Health\(x6\)/i, "Health"],
+  [/Health\(x4\)/i, "Health"],
+  [/Health\(x3\)/i, "Health"],
+  [/Defense\(x6\)/i, "Defense"],
+  [/Defense\(x4\)/i, "Defense"],
+  [/Potency\(x6\)/i, "Potency"],
+  [/Potency\(x4\)/i, "Potency"],
+  [/Tenacity\(x6\)/i, "Tenacity"],
+  [/Tenacity\(x4\)/i, "Tenacity"],
+];
+
+function clamp(n, min, max) {
+  return Math.max(min, Math.min(max, n));
+}
+
+function titleCaseRole(role = "") {
+  const r = String(role).toLowerCase();
+  if (r.includes("tank")) return "tank";
+  if (r.includes("heal")) return "healer";
+  if (r.includes("leader")) return "leader";
+  if (r.includes("support")) return "support";
+  if (r.includes("attack")) return "attacker";
+  return "support";
+}
+
+function normalizeSetName(setName = "") {
+  if (!setName) return "";
+  let normalized = String(setName);
+  for (const [pattern, replacement] of SET_NORMALIZERS) {
+    normalized = normalized.replace(pattern, replacement);
+  }
+  if (normalized.includes("+")) {
+    return normalized
+      .split("+")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return [normalized.trim()];
+}
+
+function canonicalizeSetLabel(setName = "") {
+  return String(setName)
+    .replace(/\(x\d+\)/i, "")
+    .replace(/^Crit Damage$/i, "Crit Dmg")
+    .trim();
+}
+
+function parseSetRequirements(setName = "") {
+  const raw = String(setName || "").trim();
+  if (!raw || raw === "-") return {};
+
+  const requirements = {};
+  const parenMatches = [...raw.matchAll(/([A-Za-z ]+?)\s*\(x(\d+)\)/gi)];
+  if (parenMatches.length) {
+    for (const [, label, count] of parenMatches) {
+      requirements[canonicalizeSetLabel(label)] = Number(count);
+    }
+    return requirements;
+  }
+
+  const normalized = raw
+    .replace(/^Triple\s+(.+)$/i, (_, label) => `${label}(x6)`)
+    .replace(/^Double\s+(.+?)\s*\+\s*(.+)$/i, (_, main, side) => `${main}(x4)+${side}(x2)`)
+    .replace(/^Double\s+(.+)$/i, (_, label) => `${label}(x4)`)
+    .replace(/^(.+?)\s*\+\s*(.+)$/i, (_, main, side) => `${main}(x4)+${side}(x2)`);
+
+  const reparsed = [...normalized.matchAll(/([A-Za-z ]+?)\s*\(x(\d+)\)/gi)];
+  if (reparsed.length) {
+    for (const [, label, count] of reparsed) {
+      requirements[canonicalizeSetLabel(label)] = Number(count);
+    }
+    return requirements;
+  }
+
+  requirements[canonicalizeSetLabel(normalized)] = 1;
+  return requirements;
+}
+
+function normalizeShapePrimary(shape, primary) {
+  if (shape === "Square" || shape === "Diamond") return FIXED_PRIMARY[shape];
+  return primary || "";
+}
+
+function decodeBuildPrimary(primary = "") {
+  return PRIMARY_ABBR_MAP[primary] || primary || "";
+}
+
+function getBuildForShape(char, shape, variant) {
+  const alt = variant === "alternate";
+  const map = {
+    Arrow: alt ? char.buArr || char.arrow : char.arrow,
+    Triangle: alt ? char.buTri || char.triangle : char.triangle,
+    Circle: alt ? char.buCir || char.circle : char.circle,
+    Cross: alt ? char.buCro || char.cross : char.cross,
+    Square: FIXED_PRIMARY.Square,
+    Diamond: FIXED_PRIMARY.Diamond,
+  };
+  return decodeBuildPrimary(map[shape]);
+}
+
+function getSetForVariant(char, variant) {
+  return variant === "alternate" ? (char.buSet || "") : (char.modSet || "");
+}
+
+function getSecsForVariant(char, variant) {
+  return variant === "alternate" ? (char.buSecs || "") : (char.secs || "");
+}
+
+function parsePriorityList(priorityString = "") {
+  return String(priorityString)
+    .split(">")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function normalizeFocusStatName(stat = "") {
+  return String(stat)
+    .replace(/\s+%$/g, "%")
+    .replace(/^Critical Chance\s*%$/i, "Crit Chance%")
+    .replace(/^Critical Avoidance\s*%$/i, "Crit Avoidance%")
+    .replace(/^Critical Damage\s*%?$/i, "Crit Dmg%")
+    .trim();
+}
+
+function inferBuildTags(char, priorityList) {
+  const tags = new Set([titleCaseRole(char.role)]);
+  const p = priorityList.join(" | ");
+
+  if (p.includes("Health%") && p.includes("Tenacity%") && titleCaseRole(char.role) === "attacker") {
+    tags.add("bruiser");
+  }
+  if (p.includes("Potency%")) tags.add("debuffer");
+  return [...tags];
+}
+
+const ROLL_RULES_5DOT = {
+  Speed: { min: 3, max: 6, maxRolls: 5, sixDotGain: 1 },
+  Offense: { min: 22.8, max: 45.6, maxRolls: 5, sixDotGain: 23 },
+  "Offense%": { min: 0.281, max: 0.563, maxRolls: 5, sixDotGain: 5.685 },
+  Health: { min: 214.3, max: 428.6, maxRolls: 5, sixDotGain: 557 },
+  "Health%": { min: 0.563, max: 1.125, maxRolls: 5, sixDotGain: 4.375 },
+  Protection: { min: 415.3, max: 830.6, maxRolls: 5, sixDotGain: 447 },
+  "Protection%": { min: 1.125, max: 2.25, maxRolls: 5, sixDotGain: 3.75 },
+  Defense: { min: 4.9, max: 9.8, maxRolls: 5, sixDotGain: 31 },
+  "Defense%": { min: 0.85, max: 1.7, maxRolls: 5, sixDotGain: 11.5 },
+  "Crit Chance%": { min: 1.125, max: 2.25, maxRolls: 5, sixDotGain: 0.5 },
+  "Potency%": { min: 1.125, max: 2.25, maxRolls: 5, sixDotGain: 3.75 },
+  "Tenacity%": { min: 1.125, max: 2.25, maxRolls: 5, sixDotGain: 3.75 },
+};
+
+function estimateRollProfile(statName, value) {
+  const rule = ROLL_RULES_5DOT[statName];
+  if (!rule || Number.isNaN(value) || value <= 0) {
+    return null;
+  }
+
+  const possibleProfiles = [];
+  for (let rolls = 1; rolls <= rule.maxRolls; rolls += 1) {
+    const minTotal = rule.min * rolls;
+    const maxTotal = rule.max * rolls;
+    const tolerance = Math.max(0.15, rule.max * 0.08);
+    if (value >= minTotal - tolerance && value <= maxTotal + tolerance) {
+      const avgRoll = value / rolls;
+      const rollQuality = clamp((avgRoll - rule.min) / Math.max(0.0001, rule.max - rule.min), 0, 1);
+      const totalQuality = ((rollQuality * 0.6) + ((rolls / rule.maxRolls) * 0.4));
+      possibleProfiles.push({
+        rolls,
+        avgRoll,
+        rollQuality,
+        totalQuality,
+      });
+    }
+  }
+
+  if (!possibleProfiles.length) {
+    const fallbackRolls = clamp(Math.round(value / Math.max(rule.min, 0.0001)), 1, rule.maxRolls);
+    const avgRoll = value / fallbackRolls;
+    const rollQuality = clamp((avgRoll - rule.min) / Math.max(0.0001, rule.max - rule.min), 0, 1);
+    return {
+      rolls: fallbackRolls,
+      avgRoll,
+      rollQuality,
+      totalQuality: ((rollQuality * 0.6) + ((fallbackRolls / rule.maxRolls) * 0.4)),
+    };
+  }
+
+  possibleProfiles.sort((a, b) => {
+    if (b.totalQuality !== a.totalQuality) return b.totalQuality - a.totalQuality;
+    return b.rolls - a.rolls;
+  });
+  return possibleProfiles[0];
+}
+
+function secondaryQuality(refMap, statName, value) {
+  const ref = refMap.get(statName);
+  if (!ref || Number.isNaN(value)) {
+    return {
+      band: "UNKNOWN",
+      pct: 0.35,
+      upside: 0.35,
+      sliceGainPct: 0.35,
+      rollsEstimate: 0,
+      rollQualityPct: 35,
+    };
+  }
+  const v = Number(value);
+  const max5 = ref.max5 || ref.m5 || 0;
+  const max6 = ref.max6 || ref.m6 || ref.max5 || ref.m5 || 0;
+  const good = ref.good || ref.g || 0;
+  const great = ref.great || ref.gr || 0;
+  const pctOfMax5 = max5 ? clamp(v / max5, 0, 1) : 0;
+  const rollProfile = estimateRollProfile(statName, v);
+  const rollQualityPct = rollProfile ? rollProfile.rollQuality * 100 : pctOfMax5 * 100;
+  const totalRollPct = rollProfile ? (rollProfile.rolls / 5) * 100 : pctOfMax5 * 100;
+  const pct = rollProfile ? ((rollQualityPct * 0.6) + (totalRollPct * 0.4)) / 100 : pctOfMax5;
+  let band = "LOW";
+  if (rollQualityPct >= 78 || (great && v >= great)) band = "GREAT";
+  else if (rollQualityPct >= 50 || (good && v >= good)) band = "GOOD";
+
+  // For slicer, the gain question is 5A/B -> 6E. A high-roll stat with fewer
+  // total hits still has room to improve later, while 5/5-hit stats are closer
+  // to "already made their money" even if the 6E jump still helps a bit.
+  const sliceDelta = Math.max(0, max6 - max5);
+  const rawSixDotGainPct = sliceDelta ? clamp(sliceDelta / Math.max(max6, 0.0001), 0, 1) : 0;
+  const remainingRollRoom = rollProfile ? clamp((5 - rollProfile.rolls) / 4, 0, 1) : Math.max(0, 1 - pctOfMax5);
+  const upside = clamp((remainingRollRoom * 0.65) + ((1 - pct) * 0.35), 0, 1);
+  const sliceGainPct = clamp((rawSixDotGainPct * 0.55) + ((1 - pct) * 0.45), 0, 1);
+
+  return {
+    band,
+    pct,
+    upside,
+    sliceGainPct,
+    rollsEstimate: rollProfile?.rolls || 0,
+    rollQualityPct,
+  };
+}
+
+function findMatchingBuilds({ chars, shape, primary, modSet }) {
+  const selectedPrimary = normalizeShapePrimary(shape, primary);
+  const selectedSet = modSet || "";
+  const results = [];
+
+  for (const char of chars) {
+    for (const variant of ["primary", "alternate"]) {
+      const buildPrimary = getBuildForShape(char, shape, variant);
+      if (!buildPrimary || buildPrimary !== selectedPrimary) continue;
+
+      const rawSet = getSetForVariant(char, variant);
+      const setPieces = normalizeSetName(rawSet);
+      const setRequirements = parseSetRequirements(rawSet);
+      const selectedSetCount = selectedSet ? (setRequirements[selectedSet] || 0) : 0;
+      const mainSetCount = Math.max(0, ...Object.values(setRequirements));
+      const setMatchType = !selectedSet
+        ? "shell"
+        : selectedSetCount <= 0
+          ? null
+          : selectedSetCount === mainSetCount
+            ? "main"
+            : "side";
+
+      if (selectedSet && !setMatchType) continue;
+
+      const priorityList = parsePriorityList(getSecsForVariant(char, variant));
+      const buildTags = inferBuildTags(char, priorityList);
+
+      results.push({
+        name: char.name,
+        role: char.role,
+        faction: char.faction,
+        variant,
+        set: rawSet,
+        setPieces,
+        setRequirements,
+        setMatchType,
+        shape,
+        primary: buildPrimary,
+        priorityList,
+        buildTags,
+        fitTier: !selectedSet
+          ? variant === "primary"
+            ? "primaryBuildShell"
+            : "alternateBuildShell"
+          : setMatchType === "main"
+            ? variant === "primary"
+              ? "primaryBuildMainSet"
+              : "alternateBuildMainSet"
+            : variant === "primary"
+              ? "primaryBuildSideSet"
+              : "alternateBuildSideSet",
+      });
+    }
+  }
+
+  if (!selectedSet) return results;
+
+  const mainMatches = results.filter((match) => match.setMatchType === "main");
+  return mainMatches.length ? mainMatches : results;
+}
+
+function rankFitTier(fitTier = "") {
+  if (fitTier === "primaryBuildMainSet") return 5;
+  if (fitTier === "alternateBuildMainSet") return 4;
+  if (fitTier === "primaryBuildShell") return 3;
+  if (fitTier === "primaryBuildSideSet") return 3;
+  if (fitTier === "alternateBuildShell") return 2;
+  if (fitTier === "alternateBuildSideSet") return 2;
+  return 0;
+}
+
+function uniqueMatchesByName(matches) {
+  const byName = new Map();
+
+  for (const match of matches) {
+    const current = byName.get(match.name);
+    if (!current || rankFitTier(match.fitTier) > rankFitTier(current.fitTier)) {
+      byName.set(match.name, match);
+    }
+  }
+
+  return [...byName.values()];
+}
+
+function scoreMatchAgainstEnteredSecondaries(match, secondaries) {
+  const focusMap = SEC_FOCUS[match.name] || {};
+  const entered = secondaries
+    .filter((s) => s && s.name && s.val !== "")
+    .map((s) => normalizeFocusStatName(FLAT_TO_PERCENT[s.name] ?? s.name));
+
+  let secondaryScore = 0;
+  let alignedCount = 0;
+  let strongAlignedCount = 0;
+  for (const stat of entered) {
+    const idx = match.priorityList.findIndex((priority) => normalizeFocusStatName(priority) === stat);
+    const focus = focusMap[stat];
+
+    if (idx !== -1) {
+      alignedCount += 1;
+      if (idx === 0) secondaryScore += 36;
+      else if (idx === 1) secondaryScore += 28;
+      else if (idx === 2) secondaryScore += 18;
+      else if (idx === 3) secondaryScore += 10;
+
+      if (focus) {
+        secondaryScore += focus.score * 0.35;
+        if (focus.score >= 45) strongAlignedCount += 1;
+      }
+      continue;
+    }
+
+    // Only give tiny tie-breaker credit for strong exported signal when it is
+    // not in the top-4 recommendation, so background stats do not dominate.
+    if (focus && focus.score >= 55) {
+      secondaryScore += 4;
+    }
+  }
+
+  const avgSecondaryScore = entered.length ? secondaryScore / entered.length : 0;
+  return {
+    score: (rankFitTier(match.fitTier) * 100) + avgSecondaryScore,
+    alignedCount,
+    strongAlignedCount,
+  };
+}
+
+function buildConsensusProfile(matches) {
+  const statWeights = {};
+  const tagCounts = {};
+
+  for (const match of matches) {
+    const fitMult = SLICE_RULES.fitWeights[match.fitTier] || 0.6;
+    for (const tag of match.buildTags) tagCounts[tag] = (tagCounts[tag] || 0) + fitMult;
+
+    match.priorityList.forEach((stat, idx) => {
+      const base = SLICE_RULES.weights[stat] || 3.0;
+      const priorityMult = SLICE_RULES.priorityMultipliers[idx] || SLICE_RULES.nonPriorityMultiplier;
+      let profileMult = 1.0;
+      for (const tag of match.buildTags) {
+        const profile = SLICE_RULES.profileMultipliers[tag];
+        if (profile && profile[stat]) profileMult = Math.max(profileMult, profile[stat]);
+      }
+      statWeights[stat] = (statWeights[stat] || 0) + base * priorityMult * profileMult * fitMult;
+    });
+  }
+
+  const sortedTags = Object.entries(tagCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([tag]) => tag);
+
+  const maxWeight = Math.max(1, ...Object.values(statWeights));
+  const normalized = {};
+  for (const [stat, val] of Object.entries(statWeights)) {
+    normalized[stat] = (val / maxWeight) * 100;
+  }
+
+  return {
+    statWeights: normalized,
+    dominantTags: sortedTags,
+  };
+}
+
+function normalizeSecondaryConsensus(statWeights, secondaries) {
+  const enteredTargets = secondaries
+    .filter((s) => s && s.name && s.val !== "")
+    .map((s) => FLAT_TO_PERCENT[s.name] ?? s.name);
+
+  if (!enteredTargets.length) return { ...statWeights };
+
+  const containsSpeed = enteredTargets.includes("Speed");
+  const candidateStats = Object.entries(statWeights).filter(([stat]) => containsSpeed || stat !== "Speed");
+  const candidateMax = Math.max(1, ...candidateStats.map(([, weight]) => weight));
+
+  const normalized = {};
+  for (const [stat, weight] of Object.entries(statWeights)) {
+    if (!containsSpeed && stat === "Speed") {
+      normalized[stat] = weight;
+      continue;
+    }
+    normalized[stat] = (weight / candidateMax) * 100;
+  }
+
+  return normalized;
+}
+
+function scoreModFit(matches) {
+  if (!matches.length) {
+    return { score: 0, confidence: "LOW", notes: ["No matching character builds found for this shell."] };
+  }
+
+  const uniqueMatches = uniqueMatchesByName(matches);
+
+  const best = matches.reduce((a, b) => {
+    const av = SLICE_RULES.fitWeights[a.fitTier] || 0;
+    const bv = SLICE_RULES.fitWeights[b.fitTier] || 0;
+    return bv > av ? b : a;
+  });
+
+  const mainSet = best.fitTier.includes("MainSet");
+  const sideSet = best.fitTier.includes("SideSet");
+  const primary = best.fitTier.startsWith("primary");
+  const score = mainSet ? (primary ? 100 : 92) : sideSet ? (primary ? 84 : 76) : primary ? 82 : 74;
+
+  return {
+    score,
+    confidence: uniqueMatches.length >= 8 ? "HIGH" : uniqueMatches.length >= 3 ? "MEDIUM" : "LOW",
+    notes: [
+      mainSet
+        ? "Set matches a core build set."
+        : sideSet
+          ? "Set matches a side build set."
+          : "Scoring this shell without a specific set requirement.",
+      primary ? "Primary build match found." : "Only alternate build matches found.",
+    ],
+  };
+}
+
+const FLAT_STAT_NAMES = new Set(["Offense", "Health", "Protection", "Defense"]);
+const FLAT_TO_PERCENT = {
+  Offense: "Offense%",
+  Health: "Health%",
+  Protection: "Protection%",
+  Defense: "Defense%",
+};
+const FLAT_TIEBREAKER_MULTIPLIER = 0.25;
+
+function scoreEnteredSecondaries({ enteredSecondaries, consensusProfile, sliceRef }) {
+  const refMap = new Map(sliceRef.map((r) => [r.stat || r.s, r]));
+  const scored = enteredSecondaries
+    .filter((s) => s && s.name && s.val !== "")
+    .map((s) => {
+      const matchedTarget = FLAT_TO_PERCENT[s.name] ?? s.name;
+      const isFlatTieBreaker = matchedTarget !== s.name;
+      // Flat stats can weakly support the matching % plan as a tie-breaker.
+      const defaultWeight = isFlatTieBreaker ? 4 : 18;
+      const baseWeight = consensusProfile.statWeights[matchedTarget] ?? defaultWeight;
+      const targetWeight = isFlatTieBreaker
+        ? baseWeight * FLAT_TIEBREAKER_MULTIPLIER
+        : baseWeight;
+      const quality = secondaryQuality(refMap, s.name, Number(s.val));
+      const normalizedQuality = quality.pct * 100;
+      const score = (targetWeight * 0.65) + (normalizedQuality * 0.35);
+      return {
+        ...s,
+        numericValue: Number(s.val),
+        targetWeight,
+        matchedTarget,
+        isFlatTieBreaker,
+        qualityBand: quality.band,
+        qualityPct: normalizedQuality,
+        upsidePct: quality.upside * 100,
+        sliceGainPct: quality.sliceGainPct * 100,
+        rollsEstimate: quality.rollsEstimate,
+        rollQualityPct: quality.rollQualityPct,
+        score,
+      };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  if (!scored.length) {
+    return { score: 0, scoredStats: [], deadCount: 0, topReasons: ["No secondaries entered."] };
+  }
+
+  const avg = scored.reduce((sum, s) => sum + s.score, 0) / scored.length;
+  // A stat is "dead" if it has low target weight AND low quality, OR if it's a flat stat with low quality
+  const deadCount = scored.filter(
+    (s) => (s.targetWeight < 25 && s.qualityPct < 50) || (FLAT_STAT_NAMES.has(s.name) && s.qualityPct < 60)
+  ).length;
+  const topReasons = scored.slice(0, 2).map((s) => {
+    const rollsText = s.rollsEstimate ? ` with about ${s.rollsEstimate}/5 hits` : "";
+    return `${s.name} is on plan and rates ${s.qualityBand}${rollsText}.`;
+  });
+
+  return {
+    score: clamp(avg, 0, 100),
+    scoredStats: scored,
+    deadCount,
+    topReasons,
+  };
+}
+
+function scoreSynergy(scoredStats, dominantTags) {
+  const names = new Set(scoredStats.map((s) => s.name));
+  let bonus = 0;
+
+  for (const entry of SLICE_RULES.synergyBonuses) {
+    const allPresent = entry.stats.every((stat) => names.has(stat));
+    const tagHit = entry.tags.some((tag) => dominantTags.includes(tag));
+    if (allPresent && tagHit) bonus += entry.bonus;
+  }
+
+  return clamp(bonus * 5, 0, 100);
+}
+
+function scoreUpside(scoredStats, { shape, primary } = {}) {
+  if (!scoredStats.length) return 0;
+
+  const strongOnPlan = scoredStats.filter((s) => s.targetWeight >= 55 && s.qualityPct >= 70).length;
+  const goodOnPlan = scoredStats.filter((s) => s.targetWeight >= 40 && s.qualityPct >= 60).length;
+  const avgSliceGain = scoredStats.reduce((sum, s) => sum + s.sliceGainPct, 0) / scoredStats.length;
+
+  let score = 25;
+  if (strongOnPlan >= 1) score += 24;
+  if (strongOnPlan >= 2) score += 18;
+  if (goodOnPlan >= 3) score += 12;
+  if (avgSliceGain >= 55) score += 10;
+  else if (avgSliceGain >= 35) score += 6;
+
+  // Speed arrows gain a uniquely valuable +2 primary jump when sliced to 6E.
+  if (shape === "Arrow" && primary === "Speed") score += 18;
+
+  return clamp(score, 0, 100);
+}
+
+function getDecisionLabel(finalScore) {
+  return SLICE_RULES.thresholds.find((t) => finalScore >= t.min)?.label || "DO NOT SLICE";
+}
+
+function getCeilingLabel(upsideScore) {
+  return upsideScore >= 65 ? "HIGH CEILING" : "LOW CEILING";
+}
+
+function getNextHitNarrative(scoredStats) {
+  if (!scoredStats.length) {
+    return {
+      bestCase: "No valid secondaries entered.",
+      worstCase: "No valid secondaries entered.",
+    };
+  }
+
+  const best = scoredStats.reduce((a, b) => (b.targetWeight * b.upsidePct > a.targetWeight * a.upsidePct ? b : a));
+  const worst = scoredStats.reduce((a, b) => (b.targetWeight < a.targetWeight ? b : a));
+
+  return {
+    bestCase: `Next hit lands on ${best.name}.`,
+    worstCase: `Next hit lands on ${worst.name}.`,
+  };
+}
+
+export function evaluateSliceMod({
+  chars,
+  sliceRef,
+  shape,
+  primary,
+  modSet,
+  secondaries,
+}) {
+  const selectedPrimary = normalizeShapePrimary(shape, primary);
+  const matches = findMatchingBuilds({ chars, shape, primary: selectedPrimary, modSet });
+  const uniqueCharacterMatches = uniqueMatchesByName(matches);
+  const exactBuildMatches = matches.filter((m) => m.setMatchType === "main" || m.setMatchType === "side");
+  const fit = scoreModFit(matches);
+
+  // If the primary stat can also appear as a secondary, lightly reduce its
+  // consensus weight so the shell's primary doesn't fully dominate secondary
+  // evaluation. Do not penalize Speed here: on speed arrows, speed secondaries
+  // are still premium and should remain a major slice driver.
+  const enteredCount = secondaries.filter((s) => s && s.name && s.val !== "").length;
+  const rankedMatches = uniqueCharacterMatches.map((m) => {
+    const ranking = scoreMatchAgainstEnteredSecondaries(m, secondaries);
+    return {
+      ...m,
+      matchScore: ranking.score,
+      alignedCount: ranking.alignedCount,
+      strongAlignedCount: ranking.strongAlignedCount,
+    };
+  });
+
+  const alignedMatches = rankedMatches
+    .filter((m) => {
+      if (enteredCount >= 3) return m.alignedCount >= 2 || m.strongAlignedCount >= 2;
+      if (enteredCount === 2) return m.alignedCount >= 1 || m.strongAlignedCount >= 1;
+      return true;
+    })
+    .sort((a, b) => b.matchScore - a.matchScore || b.alignedCount - a.alignedCount || a.name.localeCompare(b.name));
+
+  const consensusBaseMatches = alignedMatches.length ? alignedMatches : rankedMatches;
+  const consensus = buildConsensusProfile(consensusBaseMatches);
+  const secStatWeights = normalizeSecondaryConsensus(consensus.statWeights, secondaries);
+  if (
+    selectedPrimary &&
+    selectedPrimary !== "Speed" &&
+    secStatWeights[selectedPrimary] !== undefined
+  ) {
+    secStatWeights[selectedPrimary] = secStatWeights[selectedPrimary] * 0.55;
+  }
+  const secConsensus = { ...consensus, statWeights: secStatWeights };
+
+  const secondary = scoreEnteredSecondaries({
+    enteredSecondaries: secondaries,
+    consensusProfile: secConsensus,
+    sliceRef,
+  });
+  const upside = scoreUpside(secondary.scoredStats, { shape, primary: selectedPrimary });
+  const contextRaw = scoreSynergy(secondary.scoredStats, consensus.dominantTags) - (secondary.deadCount * 12);
+  const context = clamp(contextRaw, 0, 100);
+
+  const finalScore = clamp(
+    fit.score * SLICE_RULES.scoreWeights.fit +
+      secondary.score * SLICE_RULES.scoreWeights.secondaries +
+      upside * SLICE_RULES.scoreWeights.upside +
+      context * SLICE_RULES.scoreWeights.context,
+    0,
+    100
+  );
+
+  // Auto-sell: 3+ flat base stats (Speed excluded — flat Speed is always valued)
+  const enteredFlats = secondaries.filter(
+    (s) => s && s.name && s.val !== "" && SLICE_RULES.flatStats && SLICE_RULES.flatStats.has(s.name)
+  );
+  const forcedsell = enteredFlats.length >= (SLICE_RULES.flatStatSellThreshold || 3);
+  const noExactShellUsers = !!modSet && exactBuildMatches.length === 0;
+  const noShellUsers = !modSet && matches.length === 0;
+  const noBuildUse = noExactShellUsers || noShellUsers;
+
+  const decision = (forcedsell || noBuildUse) ? "SELL" : getDecisionLabel(finalScore);
+  const ceiling = getCeilingLabel(upside);
+  const nextHit = getNextHitNarrative(secondary.scoredStats);
+  const matchedCharacters = alignedMatches.map((m) => ({
+    name: m.name,
+    variant: m.variant,
+    set: m.set,
+    priorities: m.priorityList,
+    fitTier: m.fitTier,
+    matchScore: m.matchScore,
+    alignedCount: m.alignedCount,
+    strongAlignedCount: m.strongAlignedCount,
+  }));
+
+  const reasonLines = [
+    ...fit.notes,
+    ...secondary.topReasons,
+  ];
+
+  if (forcedsell) {
+    reasonLines.unshift("3+ flat base stats – low ceiling, not worth keeping.");
+  } else if (noExactShellUsers) {
+    reasonLines.unshift("No one uses this shape / primary / set combination.");
+  } else if (noShellUsers) {
+    reasonLines.unshift("No one uses this shape / primary combination.");
+  } else if (!matches.length) {
+    reasonLines.push("Scoring fell back to generic shell handling. Confidence is low.");
+  } else if (consensus.dominantTags.length) {
+    reasonLines.push(`Best fit profile: ${consensus.dominantTags.slice(0, 2).join(" + ")}.`);
+  }
+  if (shape === "Arrow" && selectedPrimary === "Speed") {
+    reasonLines.push("Speed arrow gets extra 6E value from the +2 primary jump.");
+  }
+
+  return {
+    finalScore: Math.round(finalScore),
+    decision,
+    ceiling,
+    confidence: fit.confidence,
+    fitScore: Math.round(fit.score),
+    secondaryScore: Math.round(secondary.score),
+    upsideScore: Math.round(upside),
+    contextScore: Math.round(context),
+    matchedCount: uniqueCharacterMatches.length,
+    matchedCharacters,
+    dominantTags: consensus.dominantTags,
+    scoredStats: secondary.scoredStats,
+    reasonLines,
+    noBuildUse,
+    bestCaseNextHit: nextHit.bestCase,
+    worstCaseNextHit: nextHit.worstCase,
+  };
+}

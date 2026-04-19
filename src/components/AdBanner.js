@@ -1,19 +1,19 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
-import Constants from 'expo-constants';
+import { useAppTheme } from '../theme/appTheme';
 
-// AdMob native modules are not available in Expo Go — only load them in
-// production builds (standalone / bare workflow).
-const IS_EXPO_GO = Constants.appOwnership === 'expo';
+// Keep ads out of development/dev-client startup so native event emitters
+// from the ads package do not crash the app before JS finishes loading.
+const ADS_ENABLED = !__DEV__;
 
 let BannerAd, BannerAdSize, TestIds;
-if (!IS_EXPO_GO) {
+if (ADS_ENABLED) {
   ({ BannerAd, BannerAdSize, TestIds } = require('react-native-google-mobile-ads'));
 }
 
 // Use test ad units during development.
 // Replace with real ad unit IDs before publishing.
-const BANNER_ID = !IS_EXPO_GO
+const BANNER_ID = ADS_ENABLED
   ? Platform.select({
       ios:     TestIds.BANNER,
       android: TestIds.BANNER,
@@ -22,6 +22,9 @@ const BANNER_ID = !IS_EXPO_GO
   : null;
 
 function PlaceholderBanner() {
+  const theme = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
   return (
     <View style={styles.placeholder}>
       <Text style={styles.placeholderText}>Ad placeholder (Expo Go)</Text>
@@ -30,7 +33,10 @@ function PlaceholderBanner() {
 }
 
 export default function AdBanner() {
-  if (IS_EXPO_GO) {
+  const theme = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
+  if (!ADS_ENABLED) {
     return <PlaceholderBanner />;
   }
 
@@ -48,15 +54,15 @@ export default function AdBanner() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = colors => StyleSheet.create({
   wrapper: {
-    backgroundColor: '#0a0e17',
+    backgroundColor: colors.background,
     alignItems: 'center',
     width: '100%',
   },
   placeholder: {
-    backgroundColor: '#0d1520',
-    borderColor: '#1e2a3a',
+    backgroundColor: colors.surfaceAlt,
+    borderColor: colors.border,
     borderWidth: 1,
     borderRadius: 4,
     alignItems: 'center',
@@ -65,7 +71,7 @@ const styles = StyleSheet.create({
     height: 50,
   },
   placeholderText: {
-    color: '#475569',
+    color: colors.soft,
     fontSize: 11,
   },
 });

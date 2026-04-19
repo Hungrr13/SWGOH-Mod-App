@@ -1,3 +1,3 @@
--keep class com.hungrr13.modsswgoh.MainApplication { *; }
--keep class com.hungrr13.modsswgoh.MainActivity { *; }
--keep class com.hungrr13.modsswgoh.overlay.** { *; }
+-keep class com.hungrr13.modhelper.MainApplication { *; }
+-keep class com.hungrr13.modhelper.MainActivity { *; }
+-keep class com.hungrr13.modhelper.overlay.** { *; }

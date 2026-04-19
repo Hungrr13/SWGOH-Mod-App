@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, TextInput, ScrollView, StyleSheet,
   TouchableOpacity,
@@ -6,10 +6,99 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AdBanner from '../components/AdBanner';
 import CustomPicker from '../components/CustomPicker';
+import StatPickerModal from '../components/StatPickerModal';
+import ModShapeIcon, { SHAPE_COLORS } from '../components/ModShapeIcon';
+import { useAppTheme } from '../theme/appTheme';
 import {
-  SHAPES, SHAPE_PRIMARIES, SEC_STATS,
-  SLICE_REF, secQualityColor, calcSliceVerdict,
+  SHAPES, SHAPE_PRIMARIES, MOD_SETS,
+  SLICE_REF, secQualityColor,
+  decodePrimary, decodeModSet,
 } from '../constants/modData';
+import { CHARS as RAW_CHARS } from '../data/chars';
+import { evaluateSliceMod } from '../services/sliceEngine';
+
+// ── Decode chars once, deduplicate by name ───────────────────────────────────
+const _seen = new Set();
+const DECODED_CHARS = RAW_CHARS.filter(c => {
+  if (_seen.has(c.name)) return false;
+  _seen.add(c.name);
+  return true;
+}).map(c => ({
+  ...c,
+  arrow:    decodePrimary(c.arrow),
+  triangle: decodePrimary(c.triangle),
+  circle:   decodePrimary(c.circle),
+  cross:    decodePrimary(c.cross),
+  modSet:   decodeModSet(c.modSet),
+  buTri:    c.buTri ? decodePrimary(c.buTri) : undefined,
+  buCir:    c.buCir ? decodePrimary(c.buCir) : undefined,
+  buCro:    c.buCro ? decodePrimary(c.buCro) : undefined,
+  buArr:    c.buArr ? decodePrimary(c.buArr) : undefined,
+  buSet:    c.buSet ? decodeModSet(c.buSet) : undefined,
+}));
+
+// ── Map SLICE_REF to format sliceEngine expects ──────────────────────────────
+const ENGINE_SLICE_REF = SLICE_REF.map(r => ({
+  stat: r.s, max5: r.m5, max6: r.m6, good: r.g, great: r.gr,
+}));
+
+// ── Decision colour helpers ──────────────────────────────────────────────────
+function decisionColor(label) {
+  if (label === 'PREMIUM SLICE')   return '#4ade80';
+  if (label === 'STRONG SLICE')    return '#86efac';
+  if (label === 'SLICE IF NEEDED') return '#facc15';
+  if (label === 'HOLD')            return '#fb923c';
+  if (label === 'FILLER ONLY')     return '#94a3b8';
+  return '#f87171'; // SELL
+}
+
+function confidenceColor(c) {
+  if (c === 'HIGH')   return '#4ade80';
+  if (c === 'MEDIUM') return '#facc15';
+  return '#f87171';
+}
+
+function bandColor(band) {
+  if (band === 'GREAT') return '#c084fc';
+  if (band === 'GOOD')  return '#60a5fa';
+  return '#4ade80';
+}
+
+function decisionDefinition(label) {
+  if (label === 'PREMIUM SLICE') return 'Top-tier mod. Spend slice mats confidently.';
+  if (label === 'STRONG SLICE') return 'Very good slice target with strong value.';
+  if (label === 'SLICE IF NEEDED') return 'Worth slicing when you need this exact mod type.';
+  if (label === 'HOLD') return 'Keep and use it, but save slice mats for better mods.';
+  if (label === 'FILLER ONLY') return 'Usable for now, but not worth slicing.';
+  return 'Low-value mod shell or weak stat mix.';
+}
+
+function getMatchPresentation(score, topScore, rank) {
+  const ratio = topScore > 0 ? score / topScore : 0;
+
+  if (rank === 0) {
+    return { label: 'Best Match', tone: '#f5a623', track: '#3a2a12' };
+  }
+  if (ratio >= 0.85) {
+    return { label: 'Strong Match', tone: '#38bdf8', track: '#122c3f' };
+  }
+  if (ratio >= 0.65) {
+    return { label: 'Good Match', tone: '#4ade80', track: '#123124' };
+  }
+  return { label: 'Possible Match', tone: '#94a3b8', track: '#243244' };
+}
+
+// ── Set accent colours (matches setColor in modData) ─────────────────────────
+const SET_COLORS = {
+  Speed:        '#38bdf8',
+  Offense:      '#fb923c',
+  'Crit Dmg':   '#f87171',
+  'Crit Chance':'#facc15',
+  Health:       '#4ade80',
+  Defense:      '#94a3b8',
+  Potency:      '#c084fc',
+  Tenacity:     '#2dd4bf',
+};
 
 const NONE = '';
 
@@ -20,10 +109,22 @@ const EMPTY_SECS = [
   { stat: NONE, value: '' },
 ];
 
-export default function SliceScreen() {
+function autoPrimaryForShape(shape) {
+  if (shape === 'Square' || shape === 'Diamond') {
+    return SHAPE_PRIMARIES[shape]?.[0] ?? NONE;
+  }
+  return NONE;
+}
+
+export default function SliceScreen({ isActive = true, overlayPrefill = null, onOverlayPrefillConsumed }) {
+  const theme = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [shape, setShape]     = useState(NONE);
   const [primary, setPrimary] = useState(NONE);
+  const [modSet, setModSet]   = useState(NONE);
   const [secs, setSecs]       = useState(EMPTY_SECS);
+  const [statModal, setStatModal] = useState(null);
+  const [charsExpanded, setCharsExpanded] = useState(false);
 
   const primOptions = shape ? SHAPE_PRIMARIES[shape] ?? [] : [];
 
@@ -41,20 +142,24 @@ export default function SliceScreen() {
     const v = parseFloat(rawValue);
     if (isNaN(v)) return rawValue;
     const clamped = Math.min(ref.m5, Math.max(0, v));
-    // Keep decimals tidy — up to 3 decimal places
     return String(parseFloat(clamped.toFixed(3)));
   }
 
-  const verdict = useMemo(() => calcSliceVerdict(shape, secs), [shape, secs]);
+  // ── Engine result ──────────────────────────────────────────────────────────
+  const result = useMemo(() => {
+    if (shape === NONE) return null;
+    return evaluateSliceMod({
+      chars:       DECODED_CHARS,
+      sliceRef:    ENGINE_SLICE_REF,
+      shape,
+      primary,
+      modSet:      modSet || '',
+      secondaries: secs.map(s => ({ name: s.stat, val: s.value })),
+    });
+  }, [shape, primary, modSet, secs]);
 
-  const reset = () => {
-    setShape(NONE);
-    setPrimary(NONE);
-    setSecs(EMPTY_SECS);
-  };
-
-  // Build per-secondary stat quality rows
-  const secRows = secs.map((sec, i) => {
+  // ── Per-stat quality rows (local, always available) ───────────────────────
+  const secRows = secs.map((sec) => {
     if (!sec.stat || sec.value === '') return null;
     const v = parseFloat(sec.value);
     if (isNaN(v)) return null;
@@ -67,6 +172,42 @@ export default function SliceScreen() {
     return { stat: sec.stat, value: sec.value, color, quality, ref };
   }).filter(Boolean);
 
+  const reset = () => {
+    setShape(NONE);
+    setPrimary(NONE);
+    setModSet(NONE);
+    setSecs(EMPTY_SECS);
+    setCharsExpanded(false);
+  };
+
+  useEffect(() => {
+    if (isActive) return;
+    setStatModal(null);
+  }, [isActive]);
+
+  useEffect(() => {
+    if (!overlayPrefill?.token) return;
+
+    const nextShape = overlayPrefill.shape || NONE;
+    const nextPrimary = overlayPrefill.primary || autoPrimaryForShape(nextShape);
+    const nextSecs = EMPTY_SECS.map((slot, index) => {
+      const incoming = overlayPrefill.secondaries?.[index];
+      if (!incoming) return slot;
+      return {
+        stat: incoming.stat || NONE,
+        value: incoming.value || '',
+      };
+    });
+
+    setShape(nextShape);
+    setPrimary(nextPrimary || NONE);
+    setModSet(overlayPrefill.modSet || NONE);
+    setSecs(nextSecs);
+    setCharsExpanded(false);
+
+    onOverlayPrefillConsumed?.();
+  }, [overlayPrefill, onOverlayPrefillConsumed]);
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView
@@ -77,17 +218,47 @@ export default function SliceScreen() {
         <Text style={styles.heading}>Mod Slicer</Text>
         <Text style={styles.subheading}>Enter your mod's stats to see slice potential</Text>
 
-        {/* Shape + Primary */}
+        {/* ── Shell: Mod Set + Shape + Primary + Stats ── */}
         <View style={styles.card}>
+          <Text style={styles.label}>Mod Set</Text>
+          <View style={styles.setGrid}>
+            {MOD_SETS.map(s => {
+              const active = modSet === s;
+              const color = SET_COLORS[s] ?? '#e2e8f0';
+              return (
+                <TouchableOpacity
+                  key={s}
+                  style={[styles.setCell, active && { borderColor: color, backgroundColor: theme.surfaceAlt }]}
+                  onPress={() => setModSet(active ? NONE : s)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.setCellText, active && { color, fontWeight: '700' }]}>{s}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
           <Text style={styles.label}>Mod Shape</Text>
-          <CustomPicker
-            selectedValue={shape}
-            onValueChange={v => { setShape(v); setPrimary(NONE); }}
-            items={[
-              { label: 'Select shape…', value: NONE },
-              ...SHAPES.map(s => ({ label: s, value: s })),
-            ]}
-          />
+          <View style={styles.shapeGrid}>
+            {SHAPES.map(s => {
+              const active = shape === s;
+              const color = SHAPE_COLORS[s];
+              return (
+                <TouchableOpacity
+                  key={s}
+                  style={[styles.shapeCell, active && { borderColor: color, backgroundColor: theme.surfaceAlt }]}
+                  onPress={() => {
+                    setShape(s);
+                    setPrimary(autoPrimaryForShape(s));
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <ModShapeIcon shape={s} size={22} />
+                  <Text style={[styles.shapeCellText, active && { color }]}>{s}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
 
           {shape !== NONE && (
             <>
@@ -96,30 +267,42 @@ export default function SliceScreen() {
                 selectedValue={primary}
                 onValueChange={setPrimary}
                 items={[
-                  { label: 'Select primary…', value: NONE },
+                  { label: 'Any primary', value: NONE },
                   ...primOptions.map(p => ({ label: p, value: p })),
                 ]}
               />
             </>
           )}
-        </View>
 
-        {/* Secondary stats */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Secondary Stats</Text>
+          <Text style={[styles.label, styles.secondaryLabel]}>Secondary Stats</Text>
           {secs.map((sec, i) => (
             <View key={i} style={styles.secRow}>
-              <CustomPicker
-                selectedValue={sec.stat}
-                onValueChange={v => updateSec(i, 'stat', v)}
-                items={[
-                  { label: `Stat ${i + 1}`, value: NONE },
-                  ...SEC_STATS.map(s => ({ label: s, value: s })),
+              <TouchableOpacity
+                style={[
+                  styles.statTrigger,
+                  sec.stat && styles.statTriggerActive,
+                  result?.noBuildUse && styles.statTriggerBlocked,
                 ]}
-                style={{ flex: 1, marginRight: 8 }}
-              />
+                onPress={() => {
+                  if (result?.noBuildUse) return;
+                  setStatModal(i);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.statTriggerText,
+                    sec.stat && styles.statTriggerTextActive,
+                    result?.noBuildUse && styles.statTriggerTextBlocked,
+                  ]}
+                >
+                  {result?.noBuildUse ? 'No Builds Sell' : (sec.stat || `Stat ${i + 1}`)}
+                </Text>
+              </TouchableOpacity>
               <View style={styles.valueCol}>
-                {sec.stat ? (
+                {result?.noBuildUse ? (
+                  <Text style={[styles.rangeHint, styles.rangeHintBlocked]}>Skip stats</Text>
+                ) : sec.stat ? (
                   <Text style={styles.rangeHint}>
                     {'0 – ' + (SLICE_REF.find(r => r.s === sec.stat)?.m5 ?? '—')}
                   </Text>
@@ -127,16 +310,18 @@ export default function SliceScreen() {
                   <Text style={styles.rangeHint}> </Text>
                 )}
                 <TextInput
-                  style={styles.valueInput}
+                  style={[styles.valueInput, result?.noBuildUse && styles.valueInputBlocked]}
                   placeholder="Value"
-                  placeholderTextColor="#475569"
-                  value={sec.value}
+                  placeholderTextColor={result?.noBuildUse ? '#fca5a5' : theme.soft}
+                  value={result?.noBuildUse ? '' : sec.value}
                   onChangeText={v => updateSec(i, 'value', v)}
                   onBlur={() => {
+                    if (result?.noBuildUse) return;
                     if (sec.stat && sec.value !== '') {
                       updateSec(i, 'value', clampSecValue(sec.stat, sec.value));
                     }
                   }}
+                  editable={!result?.noBuildUse}
                   keyboardType="decimal-pad"
                 />
               </View>
@@ -144,22 +329,111 @@ export default function SliceScreen() {
           ))}
         </View>
 
-        {/* Verdict */}
-        {(shape !== NONE || secs.some(s => s.stat)) && (
-          <View style={[styles.verdictCard, { borderColor: verdict.color }]}>
-            <Text style={[styles.verdictLabel, { color: verdict.color }]}>
-              {verdict.label}
-            </Text>
-            <Text style={styles.verdictDesc}>{verdict.desc}</Text>
-          </View>
+        <StatPickerModal
+          visible={statModal !== null}
+          selected={statModal !== null ? secs[statModal].stat : ''}
+          onSelect={v => statModal !== null && updateSec(statModal, 'stat', v)}
+          onClose={() => setStatModal(null)}
+        />
+
+        {/* ── Engine Analysis ── */}
+        {result && (
+          <>
+            {/* Decision */}
+            <View style={[styles.verdictCard, { borderColor: decisionColor(result.decision) }]}>
+              <Text style={[styles.verdictLabel, { color: decisionColor(result.decision) }]}>
+                {result.decision}
+              </Text>
+              <Text style={styles.verdictScore}>Score: {result.finalScore} / 100</Text>
+              <Text style={styles.verdictMeaning}>
+                {decisionDefinition(result.decision)}
+              </Text>
+              {result.reasonLines[0] ? (
+                <Text style={styles.verdictReason}>{result.reasonLines[0]}</Text>
+              ) : null}
+            </View>
+
+            {/* Next hit */}
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Next Roll Potential</Text>
+              <View style={styles.metaRow}>
+                <Text style={[styles.metaKey, { color: '#4ade80' }]}>Best case </Text>
+                <Text style={[styles.metaVal, { flex: 2 }]}>{result.bestCaseNextHit}</Text>
+              </View>
+              <View style={styles.metaRow}>
+                <Text style={[styles.metaKey, { color: '#f87171' }]}>Worst case </Text>
+                <Text style={[styles.metaVal, { flex: 2 }]}>{result.worstCaseNextHit}</Text>
+              </View>
+            </View>
+
+            {/* Reason lines */}
+            {result.reasonLines.length > 0 && (
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Analysis</Text>
+                {result.reasonLines.map((line, i) => (
+                  <View key={i} style={styles.reasonRow}>
+                    <Text style={styles.reasonDot}>·</Text>
+                    <Text style={styles.reasonText}>{line}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Best matching characters */}
+            {result.matchedCharacters.length > 0 && (
+              <View style={styles.card}>
+                <TouchableOpacity
+                  style={styles.cardTitleRow}
+                  onPress={() => setCharsExpanded(e => !e)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.cardTitle}>
+                    Best Characters ({result.matchedCount})
+                  </Text>
+                  <Text style={styles.chevron}>{charsExpanded ? '▲' : '▼'}</Text>
+                </TouchableOpacity>
+                {charsExpanded && result.matchedCharacters.map((c, i) => {
+                  const topScore = result.matchedCharacters[0]?.matchScore ?? c.matchScore;
+                  const matchMeta = getMatchPresentation(c.matchScore, topScore, i);
+                  const fillWidth = topScore > 0 ? `${Math.max(16, Math.round((c.matchScore / topScore) * 100))}%` : '16%';
+                  return (
+                  <View key={i} style={styles.charRow}>
+                    <View style={styles.charHeader}>
+                      <View style={styles.charTitleWrap}>
+                        <Text style={styles.charName}>{c.name}</Text>
+                        <View style={[styles.rankBadge, { borderColor: matchMeta.tone }]}>
+                          <Text style={[styles.rankBadgeText, { color: matchMeta.tone }]}>{`#${i + 1}`}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.charVariant}>
+                        {c.variant === 'alternate' ? 'Alt build' : 'Main build'}
+                      </Text>
+                    </View>
+                    <View style={styles.matchSummary}>
+                      <View style={styles.matchSummaryRow}>
+                        <Text style={[styles.matchSummaryText, { color: matchMeta.tone }]}>{matchMeta.label}</Text>
+                        <Text style={styles.matchSummaryRank}>{`${c.alignedCount} stat${c.alignedCount === 1 ? '' : 's'} aligned`}</Text>
+                      </View>
+                      <View style={[styles.matchMeter, { backgroundColor: matchMeta.track }]}>
+                        <View style={[styles.matchMeterFill, { width: fillWidth, backgroundColor: matchMeta.tone }]} />
+                      </View>
+                    </View>
+                    <Text style={styles.charPriorities}>
+                      {c.priorities.join(' › ')}
+                    </Text>
+                  </View>
+                )})}
+              </View>
+            )}
+          </>
         )}
 
-        {/* Per-stat quality breakdown */}
+        {/* ── Per-stat quality breakdown ── */}
         {secRows.length > 0 && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Stat Quality</Text>
             {secRows.map((row, i) => (
-              <View key={i} style={styles.statQualityRow}>
+              <View key={i} style={[styles.statQualityRow, i === secRows.length - 1 && { borderBottomWidth: 0, marginBottom: 0, paddingBottom: 0 }]}>
                 <Text style={styles.statName}>{row.stat}</Text>
                 <View style={styles.statValues}>
                   <Text style={styles.statVal}>{row.value}</Text>
@@ -179,27 +453,6 @@ export default function SliceScreen() {
           </View>
         )}
 
-        {/* Reference table */}
-        <View style={styles.card}>
-          <TouchableOpacity onPress={() => {}}>
-            <Text style={styles.cardTitle}>Slice Reference</Text>
-          </TouchableOpacity>
-          <View style={styles.tableHeader}>
-            <Text style={[styles.tableCell, styles.tableHead, { flex: 2 }]}>Stat</Text>
-            <Text style={[styles.tableCell, styles.tableHead]}>Good</Text>
-            <Text style={[styles.tableCell, styles.tableHead]}>Great</Text>
-            <Text style={[styles.tableCell, styles.tableHead]}>Max 5★</Text>
-          </View>
-          {SLICE_REF.map(ref => (
-            <View key={ref.s} style={styles.tableRow}>
-              <Text style={[styles.tableCell, { flex: 2, color: '#e2e8f0' }]}>{ref.s}</Text>
-              <Text style={[styles.tableCell, { color: '#4ade80' }]}>{ref.g}</Text>
-              <Text style={[styles.tableCell, { color: '#c084fc' }]}>{ref.gr}</Text>
-              <Text style={[styles.tableCell, { color: '#60a5fa' }]}>{ref.m5}</Text>
-            </View>
-          ))}
-        </View>
-
         {/* Reset */}
         <TouchableOpacity style={styles.resetBtn} onPress={reset}>
           <Text style={styles.resetText}>Reset</Text>
@@ -213,10 +466,10 @@ export default function SliceScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#0a0e17' },
+const createStyles = colors => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.background },
   scroll: { flex: 1 },
-  container: { padding: 12 },
+  container: { paddingHorizontal: 12, paddingTop: 4, paddingBottom: 12 },
   heading: {
     color: '#f5a623',
     fontSize: 22,
@@ -225,29 +478,76 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   subheading: {
-    color: '#94a3b8',
+    color: colors.muted,
     fontSize: 13,
     textAlign: 'center',
-    marginBottom: 14,
+    marginBottom: 10,
   },
   card: {
-    backgroundColor: '#111827',
+    backgroundColor: colors.surface,
     borderRadius: 10,
     padding: 14,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#1e2a3a',
+    borderColor: colors.border,
   },
   cardTitle: {
-    color: '#94a3b8',
+    color: colors.muted,
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 10,
   },
+  cardTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  chevron: { color: colors.soft, fontSize: 12 },
+  shapeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 4,
+  },
+  shapeCell: {
+    width: '30%',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.background,
+  },
+  shapeCellText: {
+    color: colors.soft,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  setGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 2,
+    marginBottom: 4,
+  },
+  setCell: {
+    width: '23%',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 7,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  setCellText: { color: colors.soft, fontSize: 12, textAlign: 'center' },
   label: {
-    color: '#94a3b8',
+    color: colors.muted,
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -255,47 +555,146 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     marginTop: 8,
   },
-  secRow: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 8 },
-  valueCol: { alignItems: 'center' },
-  rangeHint: { color: '#475569', fontSize: 10, marginBottom: 2 },
+  secondaryLabel: {
+    marginBottom: 2,
+  },
+  secRow: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 2 },
+  statTrigger: {
+    flex: 1,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    justifyContent: 'center',
+  },
+  statTriggerActive: { borderColor: '#f5a623' },
+  statTriggerBlocked: {
+    borderColor: '#ef4444',
+    backgroundColor: '#2a1116',
+  },
+  statTriggerText: { color: colors.soft, fontSize: 13 },
+  statTriggerTextActive: { color: '#f5a623', fontWeight: '700' },
+  statTriggerTextBlocked: { color: '#fca5a5', fontWeight: '700' },
+  valueCol: { alignItems: 'center', marginLeft: 8 },
+  rangeHint: { color: colors.soft, fontSize: 10, marginBottom: 0 },
+  rangeHintBlocked: { color: '#fca5a5' },
   valueInput: {
     width: 80,
-    backgroundColor: '#0d1520',
+    height: 42,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#1e2a3a',
-    color: '#e2e8f0',
+    borderColor: colors.border,
+    color: colors.text,
     paddingHorizontal: 10,
-    paddingVertical: 10,
     fontSize: 14,
     textAlign: 'center',
   },
+  valueInputBlocked: {
+    borderColor: '#ef4444',
+    backgroundColor: '#2a1116',
+    color: '#fca5a5',
+  },
+  // ── Verdict ──
   verdictCard: {
     borderRadius: 10,
     padding: 16,
     marginBottom: 12,
     borderWidth: 2,
     alignItems: 'center',
-    backgroundColor: '#111827',
+    backgroundColor: colors.surface,
   },
   verdictLabel: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: 'bold',
     letterSpacing: 1,
   },
-  verdictDesc: {
-    color: '#94a3b8',
-    fontSize: 13,
-    textAlign: 'center',
-    marginTop: 6,
+  verdictScore: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '600',
+    marginTop: 4,
   },
+  verdictMeaning: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 4,
+    textAlign: 'center',
+    color: colors.soft,
+    lineHeight: 18,
+  },
+  verdictReason: {
+    color: colors.muted,
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 18,
+  },
+  // ── Score grid ──
+  scoreGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 12,
+  },
+  scoreCell: { alignItems: 'center', flex: 1 },
+  scoreCellVal: { fontSize: 24, fontWeight: 'bold' },
+  scoreCellLabel: { color: colors.soft, fontSize: 10, fontWeight: '600', marginTop: 2 },
+  // ── Meta rows ──
+  metaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+    borderTopWidth: 1,
+    borderTopColor: colors.surfaceAlt,
+  },
+  metaKey: { color: colors.soft, fontSize: 12 },
+  metaVal: { color: colors.text, fontSize: 12, fontWeight: '600' },
+  // ── Reason lines ──
+  reasonRow: { flexDirection: 'row', marginBottom: 4 },
+  reasonDot: { color: colors.soft, marginRight: 6, fontSize: 13 },
+  reasonText: { color: colors.muted, fontSize: 13, flex: 1 },
+  // ── Matched chars ──
+  charRow: {
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  charHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 },
+  charTitleWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, paddingRight: 8 },
+  charName: { color: colors.text, fontSize: 13, fontWeight: '700' },
+  charVariant: { color: colors.soft, fontSize: 11 },
+  rankBadge: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    backgroundColor: colors.surfaceAlt,
+  },
+  rankBadgeText: { fontSize: 11, fontWeight: '800' },
+  matchSummary: { marginTop: 6, marginBottom: 6 },
+  matchSummaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  matchSummaryText: { fontSize: 12, fontWeight: '800' },
+  matchSummaryRank: { color: colors.muted, fontSize: 11, fontWeight: '600' },
+  matchMeter: {
+    height: 6,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  matchMeterFill: {
+    height: '100%',
+    borderRadius: 999,
+  },
+  charPriorities: { color: '#60a5fa', fontSize: 12 },
+  // ── Stat quality ──
   statQualityRow: {
     marginBottom: 10,
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e2a3a',
+    borderBottomColor: colors.border,
   },
-  statName: { color: '#e2e8f0', fontSize: 13, fontWeight: '600', marginBottom: 4 },
+  statName: { color: colors.text, fontSize: 13, fontWeight: '600', marginBottom: 4 },
   statValues: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
   statVal: { color: '#f5a623', fontSize: 16, fontWeight: 'bold' },
   qualityBadge: {
@@ -306,29 +705,31 @@ const styles = StyleSheet.create({
   },
   qualityText: { fontSize: 12, fontWeight: '700' },
   thresholdRow: { flexDirection: 'row', gap: 12 },
-  threshold: { color: '#475569', fontSize: 11 },
+  threshold: { color: colors.soft, fontSize: 11 },
+  // ── Reference table ──
   tableHeader: {
     flexDirection: 'row',
     marginBottom: 4,
     paddingBottom: 6,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e2a3a',
+    borderBottomColor: colors.border,
   },
   tableRow: {
     flexDirection: 'row',
     paddingVertical: 5,
     borderBottomWidth: 1,
-    borderBottomColor: '#0d1520',
+    borderBottomColor: colors.surfaceAlt,
   },
   tableCell: { flex: 1, fontSize: 12, textAlign: 'center' },
-  tableHead: { color: '#94a3b8', fontWeight: '700', fontSize: 11 },
+  tableHead: { color: colors.muted, fontWeight: '700', fontSize: 11 },
+  // ── Reset ──
   resetBtn: {
     borderWidth: 1,
-    borderColor: '#475569',
+    borderColor: colors.soft,
     borderRadius: 8,
     padding: 12,
     alignItems: 'center',
     marginBottom: 4,
   },
-  resetText: { color: '#94a3b8', fontWeight: '600', fontSize: 14 },
+  resetText: { color: colors.muted, fontWeight: '600', fontSize: 14 },
 });

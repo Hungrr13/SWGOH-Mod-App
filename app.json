@@ -13,7 +13,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.hungrr13.modsswgoh",
+      "bundleIdentifier": "com.hungrr13.modhelper",
       "infoPlist": {
         "GADApplicationIdentifier": "ca-app-pub-3940256099942544~1458002511"
       }
@@ -23,7 +23,14 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0a0e17"
       },
-      "package": "com.hungrr13.modsswgoh"
+      "permissions": [
+        "SYSTEM_ALERT_WINDOW",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_MEDIA_PROJECTION",
+        "FOREGROUND_SERVICE_SPECIAL_USE",
+        "POST_NOTIFICATIONS"
+      ],
+      "package": "com.hungrr13.modhelper"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -40,12 +47,14 @@
         "expo-build-properties",
         {
           "android": {
+            "minSdkVersion": 24,
             "compileSdkVersion": 34,
             "targetSdkVersion": 34
           }
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "./plugins/withOverlayCapture"
     ]
   }
 }

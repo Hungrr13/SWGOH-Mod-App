@@ -112,8 +112,14 @@ export function secQualityColor(statName, value) {
   return '#4ade80';                  // green  – Partial
 }
 
+// Flat stats — valuable as secondaries but much weaker than their % counterparts.
+// Speed is excluded: flat Speed is the most valuable secondary in the game.
+export const FLAT_STATS = new Set(['Offense', 'Health', 'Protection', 'Defense']);
+
 // Priority-position colour (for Lookup/Finder where we don't have values)
-export function secPriorityColor(position) {
+// Flat stats get a muted color regardless of priority position.
+export function secPriorityColor(position, stat = '') {
+  if (FLAT_STATS.has(stat)) return '#475569'; // gray – flat stat, low value
   if (position <= 1) return '#c084fc'; // purple – top priority
   if (position === 2) return '#60a5fa'; // blue
   return '#4ade80';                    // green
@@ -122,24 +128,24 @@ export function secPriorityColor(position) {
 // ── Available secondary stats ────────────────────────────────────────────────
 export const SEC_STATS = [
   'Speed',
-  'Offense',
   'Offense%',
-  'Health',
+  'Offense',
   'Health%',
-  'Protection',
+  'Health',
   'Protection%',
-  'Defense',
+  'Protection',
   'Defense%',
+  'Defense',
   'Crit Chance%',
   'Potency%',
   'Tenacity%',
 ];
 
 // ── Arrow primaries ──────────────────────────────────────────────────────────
-export const ARROW_PRIMARIES = ['Speed','Offense%','Health%','Protection%','Accuracy%','Crit Avoidance%','Tenacity%'];
-export const TRIANGLE_PRIMARIES = ['Crit Dmg%','Crit Chance%','Offense%','Health%','Protection%','Defense%'];
-export const CIRCLE_PRIMARIES  = ['Health%','Protection%'];
-export const CROSS_PRIMARIES   = ['Offense%','Health%','Protection%','Potency%','Tenacity%'];
+export const ARROW_PRIMARIES    = ['Speed','Accuracy%','Crit Avoidance%','Health%','Protection%','Offense%','Defense%'];
+export const TRIANGLE_PRIMARIES = ['Crit Chance%','Crit Dmg%','Health%','Protection%','Offense%','Defense%'];
+export const CIRCLE_PRIMARIES   = ['Health%','Protection%'];
+export const CROSS_PRIMARIES    = ['Tenacity%','Potency%','Health%','Protection%','Offense%','Defense%'];
 export const SQUARE_PRIMARIES  = ['Offense%'];
 export const DIAMOND_PRIMARIES = ['Defense%'];
 
@@ -177,6 +183,12 @@ export function calcSliceVerdict(shape, secs) {
     if (v >= ref.gr) greatCount++;
     else if (v >= ref.g) goodCount++;
     if (stat === 'Speed') { hasSpeed = true; speedVal = v; }
+  }
+
+  // Auto-sell: 3+ flat base stats (Speed excluded — always valued)
+  const flatCount = filled.filter(({ stat }) => FLAT_STATS.has(stat)).length;
+  if (flatCount >= 3) {
+    return { label: 'SELL', color: '#f87171', desc: '3+ flat base stats – low ceiling, not worth keeping.' };
   }
 
   const isFixed = shape === 'Square' || shape === 'Diamond';
