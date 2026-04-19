@@ -22,6 +22,9 @@ references/
 # Tool build/debug output
 tools/debug_out/
 
+# Scratch/intermediate data used by tools (regeneratable)
+tmp/
+
 # Claude worktrees live alongside the repo but are separate checkouts
 .claude/worktrees/
 .claude/settings.local.json
