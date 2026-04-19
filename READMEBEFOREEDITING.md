@@ -107,6 +107,27 @@ This is the current repo map after the cleanup pass. If you are not sure where t
 
 ## Recent changes (April 2026)
 
+### Color-invariant set classifier
+- `buildObservedSymbolMask` and `buildObservedSymbolEdgeMask` in `ModIconClassifier.kt` now derive thresholds from the per-image luminance median + MAD instead of hardcoded cutoffs (`luminance > 92`, etc.). Same pipeline now handles teal Potency, purple Crit Chance, orange Offense, etc. without per-color tuning.
+- Polarity (dark-symbol-on-light vs light-symbol-on-dark) is detected from the center-vs-overall luminance gap; inverted symbols flip the mask logic.
+- Removed the inner-only `tightly = cw > 0.32` constraint on the inverted branch — it stripped Potency's crosshair *circle ring*, leaving only the "+" cross which then matched the Health template.
+- Removed the tightest generic crop variant (`(0.20, 0.41, 0.26, 0.26)` in `cropSetSymbolVariants`) for the same reason — the inner-only crop matched Health on Potency.
+
+### Set classifier: parent crop selection
+- Each `iconBitmap` variant is scored independently inside `detectSet`; the parent loop picks the best across them. Previous logic preferred the highest aggregate score, which let inflated softmax scores from a misleading crop beat a near-perfect template match from a clean crop.
+- New rule: high-confidence override at `peakRawConfidence >= 0.85`. The threshold was previously 0.7 but cases in the 0.70–0.84 range fired on misleading crops with weak margins (Offense template scoring 0.79 on a Crit Chance icon). 0.85+ requires a near-identical match.
+- File-based debug log written to `<getExternalFilesDir>/set-debug-last.txt` (Log.d is stripped from release builds). The log accumulates across all `detectSet` calls within one scan and ends with a `===FINAL===` marker showing which crop the parent chose.
+
+### Slice scoring tightening (`sliceEngine.js`)
+- `PRIORITY_BAND_POINTS` extended from `[36, 28, 18, 10]` to `[36, 28, 18, 10, 6, 4]` with a `PRIORITY_BAND_TAIL = 2` fallback so 7th+ priority stats still earn a small contribution instead of returning `undefined`.
+- Off-priority stats with `SEC_FOCUS` data now contribute `min(focus.score * 0.12, 8)` instead of an all-or-nothing `+4` at `focus.score >= 55`. Characters with strong meta usage on uncurated stats now get graceful credit.
+- New `SET_AFFINITY_STATS` map (`Crit Dmg → ["Crit Dmg%"]`, `Speed → ["Speed"]`, etc.) applies a `1.20x` weight multiplier in `scoreEnteredSecondaries` when the secondary stat aligns with the worn set's bonus stat. Reflects the in-game amplification of those stats by their set bonuses.
+
+### Overlay capture readiness
+- After granting MediaProjection permission, `runStartFlow` in `OverlayCaptureScreen.js` polls `getOverlayCaptureStatus()` through `[150, 250, 400, 600, 800]` ms delays until `screenCaptureReady` is true — fixes "scan button needs two taps on first launch" regression.
+- Bubble-attachment polling now runs **before** `launchSwgoh()` rather than after. JS execution pauses when SWGOH takes foreground, so anything queued after `launchSwgoh()` was stalling until the user swapped back to the scanner. Now the bubble is confirmed attached first, then the game launches.
+- Roll-count prefill: `App.js` now estimates roll count via `overlayRecommendation.estimateRolls(stat, value)` when OCR misses the `(N)` prefix, so slice-tab roll pills populate instead of staying blank.
+
 ### Ally-code UI + owned filter plumbed into overlay events (step 4)
 - App menu gets a new "Set Ally Code" action that opens `AllyCodeModal` (defined inline in `App.js`). The modal fetches through `rosterService`, saves the 9-digit code to AsyncStorage, and keeps a Set of owned base_ids in `rosterState` for the overlay event handler to read synchronously.
 - `App.js` hydrates `rosterState` on startup and passes `rosterState.getCurrentOwnedIds()` to `buildOverlayRecommendations` in the `captureSuccess` handler, so scan results filter to characters the player actually owns.
