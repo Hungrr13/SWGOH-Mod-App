@@ -682,6 +682,16 @@ function getTierAction({ tier, secondaries, shape, primary, finalScore, forcedse
   }
 
   if (tier === '5A') {
+    // All visible secondaries still only show (1) — mod hasn't been leveled
+    // past the initial reveals, so rolls can't be judged yet. Auto-sell
+    // already handled truly weak mods above.
+    if (analyzed.length >= 2 && analyzed.every((s) => s.rolls === 1)) {
+      return {
+        actionLabel: 'LEVEL TO 12',
+        actionColor: '#f5a623',
+        actionDesc: 'Every secondary still at (1) roll — level the mod to 12 and rescan for 6-dot slicing advice.',
+      };
+    }
     if (isSpeedArrow && speed) {
       return {
         actionLabel: 'SLICE → 6E',
