@@ -5112,19 +5112,31 @@ class ModIconClassifier(private val context: Context) {
     val scaled = Bitmap.createScaledBitmap(bitmap, setSymbolSize, setSymbolSize, true)
     val mask = BooleanArray(setSymbolSize * setSymbolSize)
 
-    // Build the baseline mask first using the four absolute-threshold tests.
-    // Then count how much of the center was captured — if coverage is very
-    // low (< ~10%), the symbol is low-contrast (e.g. dark purple fist on
-    // purple triangle) and we retry with an adaptive pass that keys off the
-    // body's mean luminance.
-    var centerPixelCount = 0
-    var baseActive = 0
+    // Pre-pass: compute mean luminance over the badge body, excluding the
+    // bright silver chrome frame (luma > 155) and deep shadow (luma < 22).
+    // This lets us detect low-contrast symbols (dark fist on purple triangle)
+    // that fail every absolute-luminance test, without being skewed by the
+    // silver frame that borders every badge.
+    var lumaSum = 0L
+    var lumaCount = 0
     for (y in 0 until setSymbolSize) {
       for (x in 0 until setSymbolSize) {
         if (!isWithinSetBadgeWindow(x, y, setSymbolSize)) continue
-        val centerWeight = centerWeight(x, y, setSymbolSize)
-        if (centerWeight <= 0.16) continue
-        centerPixelCount += 1
+        if (centerWeight(x, y, setSymbolSize) <= 0.16) continue
+        val luma = luminance(scaled.getPixel(x, y))
+        if (luma < 22 || luma > 155) continue
+        lumaSum += luma.toLong()
+        lumaCount += 1
+      }
+    }
+    val meanLuma = if (lumaCount > 20) (lumaSum.toDouble() / lumaCount) else -1.0
+
+    for (y in 0 until setSymbolSize) {
+      for (x in 0 until setSymbolSize) {
+        if (!isWithinSetBadgeWindow(x, y, setSymbolSize)) {
+          mask[y * setSymbolSize + x] = false
+          continue
+        }
         val color = scaled.getPixel(x, y)
         val luminance = luminance(color)
         val saturation = saturation(color)
@@ -5134,52 +5146,19 @@ class ModIconClassifier(private val context: Context) {
         val saturatedSymbol = saturation > 0.14f && luminance > 54
         val contrastSymbol = edgeContrast > 16 && luminance > 42
         val darkEdgeSymbol = edgeContrast > 20 && luminance in 28..120
-        val active = alphaLike > 12 &&
-          (brightSymbol || saturatedSymbol || contrastSymbol || darkEdgeSymbol)
-        mask[y * setSymbolSize + x] = active
-        if (active) baseActive += 1
+        // Adaptive pass: only applies to the mid-luma body (skip silver frame
+        // and near-black). Marks pixels that sit well below the body mean
+        // (dark symbol on colored background).
+        val adaptiveSymbol = meanLuma > 0 &&
+          luminance in 22..155 &&
+          (meanLuma - luminance) >= 18.0
+        val centerWeight = centerWeight(x, y, setSymbolSize)
+        mask[y * setSymbolSize + x] =
+          alphaLike > 12 &&
+          centerWeight > 0.16 &&
+          (brightSymbol || saturatedSymbol || contrastSymbol || darkEdgeSymbol || adaptiveSymbol)
       }
     }
-
-    val coverage = if (centerPixelCount > 0)
-      baseActive.toDouble() / centerPixelCount.toDouble()
-    else 0.0
-
-    if (coverage < 0.10) {
-      // Fallback: compute the body-mean luminance (excluding the silver chrome
-      // frame and deep shadow) and mark any pixel noticeably darker than the
-      // mean that also shows local contrast — i.e. the symbol outline.
-      var lumaSum = 0L
-      var lumaCount = 0
-      for (y in 0 until setSymbolSize) {
-        for (x in 0 until setSymbolSize) {
-          if (!isWithinSetBadgeWindow(x, y, setSymbolSize)) continue
-          if (centerWeight(x, y, setSymbolSize) <= 0.16) continue
-          val luma = luminance(scaled.getPixel(x, y))
-          if (luma < 24 || luma > 140) continue
-          lumaSum += luma.toLong()
-          lumaCount += 1
-        }
-      }
-      if (lumaCount > 30) {
-        val meanLuma = lumaSum.toDouble() / lumaCount
-        for (y in 0 until setSymbolSize) {
-          for (x in 0 until setSymbolSize) {
-            if (!isWithinSetBadgeWindow(x, y, setSymbolSize)) continue
-            if (centerWeight(x, y, setSymbolSize) <= 0.18) continue
-            if (mask[y * setSymbolSize + x]) continue
-            val color = scaled.getPixel(x, y)
-            val luminance = luminance(color)
-            if (luminance !in 22..140) continue
-            val edgeContrast = localEdgeContrast(scaled, x, y, setSymbolSize)
-            if ((meanLuma - luminance) >= 20.0 && edgeContrast > 6) {
-              mask[y * setSymbolSize + x] = true
-            }
-          }
-        }
-      }
-    }
-
     scaled.recycle()
     return normalizeSetSymbolMask(mask, setSymbolSize, profile)
   }
