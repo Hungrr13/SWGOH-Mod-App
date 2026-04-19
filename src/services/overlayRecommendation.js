@@ -1,5 +1,6 @@
 import { SLICE_REF, decodeModSet, decodePrimary, ROLL_DATA } from '../constants/modData';
 import { CHARS as RAW_CHARS } from '../data/chars';
+import { CHAR_BASE_IDS } from '../data/charBaseIds';
 import { evaluateSliceMod } from './sliceEngine';
 
 // Estimate a secondary's roll count from its numeric value when the (N)
@@ -43,6 +44,16 @@ const DECODED_CHARS = RAW_CHARS.filter(c => {
   buSet: c.buSet ? decodeModSet(c.buSet) : undefined,
 }));
 
+function pickChars(ownedBaseIds) {
+  if (!ownedBaseIds) return DECODED_CHARS;
+  const set = ownedBaseIds instanceof Set ? ownedBaseIds : new Set(ownedBaseIds);
+  if (set.size === 0) return DECODED_CHARS;
+  return DECODED_CHARS.filter(c => {
+    const id = CHAR_BASE_IDS[c.name];
+    return id && set.has(id);
+  });
+}
+
 const ENGINE_SLICE_REF = SLICE_REF.map(r => ({
   stat: r.s,
   max5: r.m5,
@@ -81,6 +92,7 @@ export function buildOverlayRecommendation(parsed, options = {}) {
   const shape = parsed?.modShape;
   const primary = parsed?.primary;
   const modSet = parsed?.modSet && parsed.modSet !== 'Not found' ? parsed.modSet : '';
+  const chars = pickChars(options.ownedBaseIds);
 
   if (!shape || shape === 'Not found' || !primary || primary === 'Not found') {
     return {
@@ -105,7 +117,7 @@ export function buildOverlayRecommendation(parsed, options = {}) {
 
   if (needsLeveling) {
     const shellOnly = evaluateSliceMod({
-      chars: DECODED_CHARS,
+      chars,
       sliceRef: ENGINE_SLICE_REF,
       shape,
       primary,
@@ -134,7 +146,7 @@ export function buildOverlayRecommendation(parsed, options = {}) {
 
   if (secondaries.length < 2) {
     const shellOnly = evaluateSliceMod({
-      chars: DECODED_CHARS,
+      chars,
       sliceRef: ENGINE_SLICE_REF,
       shape,
       primary,
@@ -159,7 +171,7 @@ export function buildOverlayRecommendation(parsed, options = {}) {
   }
 
   const result = evaluateSliceMod({
-    chars: DECODED_CHARS,
+    chars,
     sliceRef: ENGINE_SLICE_REF,
     shape,
     primary,
@@ -195,6 +207,7 @@ export function buildOverlayRecommendations(parsed, options = {}) {
   const shape = parsed?.modShape;
   const primary = parsed?.primary;
   const modSet = parsed?.modSet && parsed.modSet !== 'Not found' ? parsed.modSet : '';
+  const chars = pickChars(options.ownedBaseIds);
 
   if (!shape || shape === 'Not found' || !primary || primary === 'Not found') {
     return {
@@ -213,7 +226,7 @@ export function buildOverlayRecommendations(parsed, options = {}) {
   const secondaries = normalizeSecondaries(parsed.secondaries);
   const shell = `Set: ${modSet || 'Unknown'} • Shape: ${shape} • Primary Stat: ${primary}`;
   const result = evaluateSliceMod({
-    chars: DECODED_CHARS,
+    chars,
     sliceRef: ENGINE_SLICE_REF,
     shape,
     primary,

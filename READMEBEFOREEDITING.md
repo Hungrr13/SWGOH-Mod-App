@@ -106,6 +106,16 @@ This is the current repo map after the cleanup pass. If you are not sure where t
 
 ## Recent changes (April 2026)
 
+### Owned-character filter on overlay recommendations (step 3)
+- `src/services/overlayRecommendation.js` now accepts `options.ownedBaseIds` (a `Set<string>` of swgoh.gg base_ids, from `ownedBaseIdSet(rosterPayload)`). When present and non-empty, `DECODED_CHARS` is filtered to only entries whose `chars.js` name maps to an owned base_id via `src/data/charBaseIds.js` *before* `evaluateSliceMod` runs.
+- Falls back to full roster when the option is omitted, so every existing call site keeps working unchanged.
+- Two known duplicate mappings (same base_id from two `chars.js` names: `AHSOKATANO` and `HOTHLEIA`) are in-game renames, not mapping bugs — flagged for a chars.js cleanup pass.
+
+### chars.js → swgoh.gg base_id mapping (step 2)
+- `src/data/charBaseIds.js` (auto-generated): `CHAR_BASE_IDS` + `BASE_ID_TO_CHAR_NAME` for all 325 `chars.js` entries.
+- Generator: `node tools/map-chars-to-base-ids.js`. Pulls from Hungrr's live roster (232 authoritative), Tosche Station's scraped `DEFID` table (52), and a manual-override block (41, with medium-confidence entries flagged in-file). Regenerate whenever a `chars.js` name is added or changed.
+- Review artifacts: `tools/roster-mapping/chars-baseid-map.json` and `chars-baseid-unmatched.json`.
+
 ### Roster service (step 1 of ally-code integration)
 - New `src/services/rosterService.js`. Takes an ally code, returns a normalized `{ playerName, roster: { BASE_ID: { stars, gearLevel, relicTier, isGL, ... } }, unitCount, timestamp, fromCache }`.
 - Caches in AsyncStorage when `@react-native-async-storage/async-storage` is installed; falls back to an in-process Map otherwise. Default TTL 6 hours, overridable via `fetchRoster(code, { ttlMs })` or bypass via `{ forceRefresh: true }`.
