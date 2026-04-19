@@ -3679,6 +3679,7 @@ class ModIconClassifier(private val context: Context) {
           buildObservedSymbolEdgeMask(symbolBitmap, profile),
         )
         val scoredMatches = mutableListOf<MatchScore>()
+        val scoreBreakdown = mutableListOf<String>()
         val observedPrimaryMask = observedMasks.first()
         val observedEdgeMask = observedMasks.last()
         val observedGray = buildObservedGrayscale(symbolBitmap, setSymbolSize)
@@ -3838,9 +3839,28 @@ class ModIconClassifier(private val context: Context) {
             else -> setName
           }
           scoredMatches += MatchScore(labeledName, score)
+          scoreBreakdown += String.format(
+            java.util.Locale.US,
+            "%s model=%s variant=%.3f geom=%.3f arrowFB=%.3f burstTB=%.3f burstPatch=%.3f final=%.3f src=%s",
+            setName,
+            effectiveModelScore?.let { String.format(java.util.Locale.US, "%.3f", it) } ?: "null",
+            variantScore,
+            geometryScore,
+            arrowFeatureBonus,
+            burstTieBreak,
+            burstPatchScore,
+            score,
+            bestVariant?.source ?: "none",
+          )
         }
 
         val sortedMatches = scoredMatches.sortedByDescending { it.score }
+        Log.d(TAG, "setScore profile=$profile --- breakdown ---")
+        scoreBreakdown
+          .sortedByDescending { line ->
+            Regex("final=([-\\d.]+)").find(line)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
+          }
+          .forEach { Log.d(TAG, "setScore $it") }
         val bestMatch = sortedMatches.firstOrNull()
         val secondBestScore = sortedMatches.getOrNull(1)?.score ?: 0.0
         val bestScore = bestMatch?.score ?: 0.0
