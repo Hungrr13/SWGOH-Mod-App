@@ -6,25 +6,33 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AdBanner from '../components/AdBanner';
 import CustomPicker from '../components/CustomPicker';
+import CharacterCard from '../components/CharacterCard';
+import { CHARS } from '../data/chars';
 import {
-  SHAPES, SHAPE_PRIMARIES, SEC_STATS,
-  SLICE_REF, secQualityColor, calcSliceVerdict,
+  SHAPES, SHAPE_PRIMARIES, SEC_STATS, MOD_SETS, MOD_TIERS,
+  SLICE_REF, ROLL_DATA, SLICE_GAIN,
+  calcSliceVerdict, rollEfficiency, efficiencyColor, efficiencyLabel,
+  matchCharactersForMod,
 } from '../constants/modData';
 
 const NONE = '';
+const ROLL_OPTIONS = [1, 2, 3, 4, 5];
 
 const EMPTY_SECS = [
-  { stat: NONE, value: '' },
-  { stat: NONE, value: '' },
-  { stat: NONE, value: '' },
-  { stat: NONE, value: '' },
+  { stat: NONE, value: '', rolls: '1', hidden: false },
+  { stat: NONE, value: '', rolls: '1', hidden: false },
+  { stat: NONE, value: '', rolls: '1', hidden: false },
+  { stat: NONE, value: '', rolls: '1', hidden: false },
 ];
 
 export default function SliceScreen() {
+  const [tier, setTier]       = useState('5A');
   const [shape, setShape]     = useState(NONE);
   const [primary, setPrimary] = useState(NONE);
+  const [modSet, setModSet]   = useState(NONE);
   const [secs, setSecs]       = useState(EMPTY_SECS);
 
+  const dotLevel = tier.startsWith('6') ? 6 : 5;
   const primOptions = shape ? SHAPE_PRIMARIES[shape] ?? [] : [];
 
   function updateSec(index, field, value) {
@@ -35,37 +43,60 @@ export default function SliceScreen() {
     });
   }
 
+  function statCap(stat) {
+    const ref = ROLL_DATA[stat];
+    if (!ref) return null;
+    return dotLevel === 6 ? ref.cap6 : ref.cap5;
+  }
+
   function clampSecValue(stat, rawValue) {
-    const ref = SLICE_REF.find(r => r.s === stat);
-    if (!ref) return rawValue;
+    const cap = statCap(stat);
+    if (cap == null) return rawValue;
     const v = parseFloat(rawValue);
     if (isNaN(v)) return rawValue;
-    const clamped = Math.min(ref.m5, Math.max(0, v));
-    // Keep decimals tidy — up to 3 decimal places
+    const clamped = Math.min(cap, Math.max(0, v));
     return String(parseFloat(clamped.toFixed(3)));
   }
 
-  const verdict = useMemo(() => calcSliceVerdict(shape, secs), [shape, secs]);
+  const verdict = useMemo(
+    () => calcSliceVerdict(shape, secs, tier),
+    [shape, secs, tier]
+  );
+
+  const charMatches = useMemo(
+    () => matchCharactersForMod(CHARS, { shape, primary, secs, modSet }).slice(0, 8),
+    [shape, primary, secs, modSet]
+  );
 
   const reset = () => {
+    setTier('5A');
     setShape(NONE);
     setPrimary(NONE);
+    setModSet(NONE);
     setSecs(EMPTY_SECS);
   };
 
-  // Build per-secondary stat quality rows
-  const secRows = secs.map((sec, i) => {
+  // Per-secondary efficiency rows
+  const secRows = secs.map((sec) => {
     if (!sec.stat || sec.value === '') return null;
-    const v = parseFloat(sec.value);
-    if (isNaN(v)) return null;
-    const ref = SLICE_REF.find(r => r.s === sec.stat);
-    if (!ref) return null;
-    const color = secQualityColor(sec.stat, v);
-    let quality = 'Partial';
-    if (v >= ref.gr) quality = 'Strong';
-    else if (v >= ref.g) quality = 'Good';
-    return { stat: sec.stat, value: sec.value, color, quality, ref };
+    const eff = rollEfficiency(sec.stat, sec.value, sec.rolls, dotLevel);
+    if (eff === null) return null;
+    const gain = SLICE_GAIN[sec.stat] ?? 0;
+    const cap = statCap(sec.stat);
+    return {
+      stat: sec.stat,
+      value: sec.value,
+      rolls: sec.rolls,
+      eff,
+      effPct: Math.round(eff * 100),
+      color: efficiencyColor(eff),
+      label: efficiencyLabel(eff),
+      gain,
+      cap,
+    };
   }).filter(Boolean);
+
+  const anyInput = shape !== NONE || secs.some(s => s.stat);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -75,9 +106,31 @@ export default function SliceScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <Text style={styles.heading}>Mod Slicer</Text>
-        <Text style={styles.subheading}>Enter your mod's stats to see slice potential</Text>
+        <Text style={styles.subheading}>Enter your mod's tier, stats, and roll counts</Text>
 
-        {/* Shape + Primary */}
+        {/* Tier selector */}
+        <View style={styles.card}>
+          <Text style={styles.label}>Current Tier</Text>
+          <View style={styles.pillRow}>
+            {MOD_TIERS.map(t => (
+              <TouchableOpacity
+                key={t}
+                style={[styles.pill, tier === t && styles.pillActive]}
+                onPress={() => setTier(t)}
+              >
+                <Text style={[styles.pillText, tier === t && styles.pillTextActive]}>{t}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Text style={styles.hint}>
+            {tier === '5C' && '5C → Should you slice to 5B? Cheap tier, forgiving rules.'}
+            {tier === '5B' && '5B → Should you slice to 5A? Last 5-dot commitment.'}
+            {tier === '5A' && '5A → Ready to commit materials for 6-dot?'}
+            {tier === '6E' && '6E → Rate your finished mod.'}
+          </Text>
+        </View>
+
+        {/* Shape + Primary + Set */}
         <View style={styles.card}>
           <Text style={styles.label}>Mod Shape</Text>
           <CustomPicker
@@ -102,50 +155,87 @@ export default function SliceScreen() {
               />
             </>
           )}
+
+          <Text style={styles.label}>Mod Set (optional)</Text>
+          <CustomPicker
+            selectedValue={modSet}
+            onValueChange={setModSet}
+            items={[
+              { label: 'Any', value: NONE },
+              ...MOD_SETS.map(s => ({ label: s, value: s })),
+            ]}
+          />
         </View>
 
         {/* Secondary stats */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Secondary Stats</Text>
+          <Text style={styles.microHint}>
+            # = roll count from scan. Tap 👁 if scan shows "Reveals at level 3/6/9/12".
+          </Text>
           {secs.map((sec, i) => (
-            <View key={i} style={styles.secRow}>
-              <CustomPicker
-                selectedValue={sec.stat}
-                onValueChange={v => updateSec(i, 'stat', v)}
-                items={[
-                  { label: `Stat ${i + 1}`, value: NONE },
-                  ...SEC_STATS.map(s => ({ label: s, value: s })),
-                ]}
-                style={{ flex: 1, marginRight: 8 }}
-              />
-              <View style={styles.valueCol}>
-                {sec.stat ? (
-                  <Text style={styles.rangeHint}>
-                    {'0 – ' + (SLICE_REF.find(r => r.s === sec.stat)?.m5 ?? '—')}
+            <View key={i}>
+              <View style={styles.secRow}>
+                <TouchableOpacity
+                  style={[styles.hideBtn, sec.hidden && styles.hideBtnActive]}
+                  onPress={() => updateSec(i, 'hidden', !sec.hidden)}
+                >
+                  <Text style={[styles.hideBtnText, sec.hidden && styles.hideBtnTextActive]}>
+                    {sec.hidden ? '🚫' : '👁'}
                   </Text>
-                ) : (
-                  <Text style={styles.rangeHint}> </Text>
-                )}
-                <TextInput
-                  style={styles.valueInput}
-                  placeholder="Value"
-                  placeholderTextColor="#475569"
-                  value={sec.value}
-                  onChangeText={v => updateSec(i, 'value', v)}
-                  onBlur={() => {
-                    if (sec.stat && sec.value !== '') {
-                      updateSec(i, 'value', clampSecValue(sec.stat, sec.value));
-                    }
-                  }}
-                  keyboardType="decimal-pad"
+                </TouchableOpacity>
+                <CustomPicker
+                  selectedValue={sec.stat}
+                  onValueChange={v => updateSec(i, 'stat', v)}
+                  items={[
+                    { label: `Stat ${i + 1}`, value: NONE },
+                    ...SEC_STATS.map(s => ({ label: s, value: s })),
+                  ]}
+                  style={{ flex: 1, marginRight: 6 }}
                 />
+                {!sec.hidden && (
+                  <>
+                    <View style={styles.rollsCol}>
+                      <Text style={styles.miniLabel}>#</Text>
+                      <CustomPicker
+                        selectedValue={sec.rolls}
+                        onValueChange={v => updateSec(i, 'rolls', v)}
+                        items={ROLL_OPTIONS.map(n => ({ label: String(n), value: String(n) }))}
+                        style={styles.rollsPicker}
+                      />
+                    </View>
+                    <View style={styles.valueCol}>
+                      <Text style={styles.rangeHint}>
+                        {sec.stat ? '0 – ' + (statCap(sec.stat) ?? '—') : ' '}
+                      </Text>
+                      <TextInput
+                        style={styles.valueInput}
+                        placeholder="Value"
+                        placeholderTextColor="#475569"
+                        value={sec.value}
+                        onChangeText={v => updateSec(i, 'value', v)}
+                        onBlur={() => {
+                          if (sec.stat && sec.value !== '') {
+                            updateSec(i, 'value', clampSecValue(sec.stat, sec.value));
+                          }
+                        }}
+                        keyboardType="decimal-pad"
+                      />
+                    </View>
+                  </>
+                )}
               </View>
+              {sec.hidden && (
+                <Text style={styles.hiddenNote}>
+                  Hidden — reveals at level 3/6/9/12. Level mod to 12 first.
+                </Text>
+              )}
             </View>
           ))}
         </View>
 
         {/* Verdict */}
-        {(shape !== NONE || secs.some(s => s.stat)) && (
+        {anyInput && (
           <View style={[styles.verdictCard, { borderColor: verdict.color }]}>
             <Text style={[styles.verdictLabel, { color: verdict.color }]}>
               {verdict.label}
@@ -154,50 +244,73 @@ export default function SliceScreen() {
           </View>
         )}
 
-        {/* Per-stat quality breakdown */}
+        {/* Per-stat efficiency breakdown */}
         {secRows.length > 0 && (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Stat Quality</Text>
+            <Text style={styles.cardTitle}>Roll Efficiency</Text>
             {secRows.map((row, i) => (
               <View key={i} style={styles.statQualityRow}>
-                <Text style={styles.statName}>{row.stat}</Text>
-                <View style={styles.statValues}>
-                  <Text style={styles.statVal}>{row.value}</Text>
+                <View style={styles.statHeader}>
+                  <Text style={styles.statName}>
+                    {row.stat} <Text style={styles.statRolls}>×{row.rolls}</Text>
+                  </Text>
                   <View style={[styles.qualityBadge, { borderColor: row.color }]}>
                     <Text style={[styles.qualityText, { color: row.color }]}>
-                      {row.quality}
+                      {row.label} {row.effPct}%
                     </Text>
                   </View>
                 </View>
+                <View style={styles.effBar}>
+                  <View style={[styles.effFill, { width: `${row.effPct}%`, backgroundColor: row.color }]} />
+                </View>
                 <View style={styles.thresholdRow}>
-                  <Text style={styles.threshold}>Good: {row.ref.g}</Text>
-                  <Text style={styles.threshold}>Great: {row.ref.gr}</Text>
-                  <Text style={styles.threshold}>Max: {row.ref.m5}</Text>
+                  <Text style={styles.threshold}>Value: {row.value} / {row.cap}</Text>
+                  {row.gain > 0 && (
+                    <Text style={styles.threshold}>
+                      5A→6E gain: +{Math.round(row.gain * 100)}%
+                    </Text>
+                  )}
                 </View>
               </View>
             ))}
           </View>
         )}
 
-        {/* Reference table */}
+        {/* Character recommendations */}
+        {charMatches.length > 0 && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Recommended Characters</Text>
+            <Text style={styles.microHint}>Best matches for this mod's primary + secondaries</Text>
+            {charMatches.map(({ char, score }, i) => (
+              <CharacterCard key={char.name + i} char={char} score={score} />
+            ))}
+          </View>
+        )}
+
+        {/* Roll reference table */}
         <View style={styles.card}>
-          <TouchableOpacity onPress={() => {}}>
-            <Text style={styles.cardTitle}>Slice Reference</Text>
-          </TouchableOpacity>
+          <Text style={styles.cardTitle}>Roll Reference ({dotLevel}-dot)</Text>
           <View style={styles.tableHeader}>
             <Text style={[styles.tableCell, styles.tableHead, { flex: 2 }]}>Stat</Text>
-            <Text style={[styles.tableCell, styles.tableHead]}>Good</Text>
-            <Text style={[styles.tableCell, styles.tableHead]}>Great</Text>
-            <Text style={[styles.tableCell, styles.tableHead]}>Max 5★</Text>
+            <Text style={[styles.tableCell, styles.tableHead]}>Min</Text>
+            <Text style={[styles.tableCell, styles.tableHead]}>Max</Text>
+            <Text style={[styles.tableCell, styles.tableHead]}>Cap (×5)</Text>
           </View>
-          {SLICE_REF.map(ref => (
-            <View key={ref.s} style={styles.tableRow}>
-              <Text style={[styles.tableCell, { flex: 2, color: '#e2e8f0' }]}>{ref.s}</Text>
-              <Text style={[styles.tableCell, { color: '#4ade80' }]}>{ref.g}</Text>
-              <Text style={[styles.tableCell, { color: '#c084fc' }]}>{ref.gr}</Text>
-              <Text style={[styles.tableCell, { color: '#60a5fa' }]}>{ref.m5}</Text>
-            </View>
-          ))}
+          {SEC_STATS.map(s => {
+            const r = ROLL_DATA[s];
+            if (!r) return null;
+            const min = dotLevel === 6 ? r.min6 : r.min5;
+            const max = dotLevel === 6 ? r.max6 : r.max5;
+            const cap = dotLevel === 6 ? r.cap6 : r.cap5;
+            return (
+              <View key={s} style={styles.tableRow}>
+                <Text style={[styles.tableCell, { flex: 2, color: '#e2e8f0' }]}>{s}</Text>
+                <Text style={[styles.tableCell, { color: '#94a3b8' }]}>{min}</Text>
+                <Text style={[styles.tableCell, { color: '#60a5fa' }]}>{max}</Text>
+                <Text style={[styles.tableCell, { color: '#c084fc' }]}>{cap}</Text>
+              </View>
+            );
+          })}
         </View>
 
         {/* Reset */}
@@ -255,17 +368,59 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     marginTop: 8,
   },
-  secRow: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 8 },
+  hint: { color: '#64748b', fontSize: 12, marginTop: 8, fontStyle: 'italic' },
+  microHint: { color: '#475569', fontSize: 11, marginBottom: 8 },
+  pillRow: { flexDirection: 'row', gap: 6 },
+  pill: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#1e2a3a',
+    borderRadius: 6,
+    paddingVertical: 8,
+    alignItems: 'center',
+    backgroundColor: '#0d1520',
+  },
+  pillActive: {
+    borderColor: '#f5a623',
+    backgroundColor: '#1a1408',
+  },
+  pillText: { color: '#94a3b8', fontSize: 13, fontWeight: '600' },
+  pillTextActive: { color: '#f5a623', fontWeight: '700' },
+  secRow: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 4 },
+  hideBtn: {
+    width: 32,
+    height: 38,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#1e2a3a',
+    backgroundColor: '#0d1520',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6,
+  },
+  hideBtnActive: { borderColor: '#f5a623', backgroundColor: '#1a1408' },
+  hideBtnText: { fontSize: 14 },
+  hideBtnTextActive: { fontSize: 14 },
+  hiddenNote: {
+    color: '#f5a623',
+    fontSize: 11,
+    marginLeft: 40,
+    marginBottom: 8,
+    fontStyle: 'italic',
+  },
+  rollsCol: { alignItems: 'center', marginRight: 6 },
+  rollsPicker: { width: 54 },
+  miniLabel: { color: '#475569', fontSize: 10, marginBottom: 2 },
   valueCol: { alignItems: 'center' },
   rangeHint: { color: '#475569', fontSize: 10, marginBottom: 2 },
   valueInput: {
-    width: 80,
+    width: 76,
     backgroundColor: '#0d1520',
     borderRadius: 6,
     borderWidth: 1,
     borderColor: '#1e2a3a',
     color: '#e2e8f0',
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 10,
     fontSize: 14,
     textAlign: 'center',
@@ -279,7 +434,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#111827',
   },
   verdictLabel: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: 'bold',
     letterSpacing: 1,
   },
@@ -295,18 +450,31 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#1e2a3a',
   },
-  statName: { color: '#e2e8f0', fontSize: 13, fontWeight: '600', marginBottom: 4 },
-  statValues: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  statVal: { color: '#f5a623', fontSize: 16, fontWeight: 'bold' },
+  statHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  statName: { color: '#e2e8f0', fontSize: 13, fontWeight: '600' },
+  statRolls: { color: '#64748b', fontWeight: '400' },
   qualityBadge: {
     borderWidth: 1,
     borderRadius: 10,
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
-  qualityText: { fontSize: 12, fontWeight: '700' },
+  qualityText: { fontSize: 11, fontWeight: '700' },
+  effBar: {
+    height: 6,
+    backgroundColor: '#0d1520',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 6,
+  },
+  effFill: { height: '100%' },
   thresholdRow: { flexDirection: 'row', gap: 12 },
-  threshold: { color: '#475569', fontSize: 11 },
+  threshold: { color: '#64748b', fontSize: 11 },
   tableHeader: {
     flexDirection: 'row',
     marginBottom: 4,
