@@ -67,6 +67,7 @@ export function buildOverlayRecommendation(parsed, options = {}) {
     };
   }
 
+  const hiddenEntries = (parsed.secondaries || []).filter(s => s?.hidden);
   const secondaries = normalizeSecondaries(parsed.secondaries);
   if (secondaries.length < 2) {
     const shellOnly = evaluateSliceMod({
@@ -83,12 +84,16 @@ export function buildOverlayRecommendation(parsed, options = {}) {
       .join(', ');
     const shell = [modSet || null, shape, primary].filter(Boolean).join(' • ');
 
+    const hiddenNote = hiddenEntries.length
+      ? `Level this mod to 12 and rescan for slice advice (${hiddenEntries.length} hidden secondary reveals at lvl ${Math.max(...hiddenEntries.map(h => h.revealLevel || 12))}).`
+      : 'Need at least 2 clear secondaries for slice value.';
+
     return {
-      title: 'Shell Match Found',
+      title: hiddenEntries.length ? 'Level Mod First' : 'Shell Match Found',
       body: [
         shell,
         likelyUsers ? `Likely users: ${likelyUsers}` : 'No strong shell users found yet.',
-        'Need at least 2 clear secondaries for slice value.',
+        hiddenNote,
         rawPreview ? `Read: ${rawPreview}` : null,
       ].filter(Boolean).join('\n'),
     };
@@ -145,6 +150,7 @@ export function buildOverlayRecommendations(parsed, options = {}) {
     };
   }
 
+  const hiddenEntries = (parsed.secondaries || []).filter(s => s?.hidden);
   const secondaries = normalizeSecondaries(parsed.secondaries);
   const shell = `Set: ${modSet || 'Unknown'} • Shape: ${shape} • Primary Stat: ${primary}`;
   const result = evaluateSliceMod({
@@ -158,20 +164,26 @@ export function buildOverlayRecommendations(parsed, options = {}) {
 
   const topMatches = result.matchedCharacters.slice(0, 6);
   const noUsers = topMatches.length === 0;
+  const hasHidden = hiddenEntries.length > 0;
+  const maxReveal = hasHidden ? Math.max(...hiddenEntries.map(h => h.revealLevel || 12)) : 12;
 
   const sliceTitle = noUsers
     ? 'SELL'
-    : secondaries.length < 2
-      ? 'Shell Match'
-      : `${result.decision} ${result.finalScore}/100`;
+    : hasHidden && secondaries.length < 2
+      ? 'Level Mod First'
+      : secondaries.length < 2
+        ? 'Shell Match'
+        : `${result.decision} ${result.finalScore}/100`;
   const sliceBody = noUsers
     ? [shell, 'No characters want this shell.'].filter(Boolean).join('\n')
-    : secondaries.length < 2
-      ? [shell, 'Need 2+ clear secondaries for slice value.'].filter(Boolean).join('\n')
-      : [
-          shell,
-          decisionDefinition(result.decision),
-        ].filter(Boolean).join('\n');
+    : hasHidden && secondaries.length < 2
+      ? [shell, `Level this mod to ${Math.max(maxReveal, 12)} and rescan for slice advice.`].filter(Boolean).join('\n')
+      : secondaries.length < 2
+        ? [shell, 'Need 2+ clear secondaries for slice value.'].filter(Boolean).join('\n')
+        : [
+            shell,
+            decisionDefinition(result.decision),
+          ].filter(Boolean).join('\n');
 
   const charBody = topMatches.length
     ? topMatches.map((m, i) => charLine(m, i)).join('\n')

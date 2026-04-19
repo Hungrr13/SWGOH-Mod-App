@@ -361,6 +361,23 @@ function extractSecondaries(lines, primary, fullText = '') {
     if (lower.includes('slice mod')) return;
     if (lower.includes('mod is at max level')) return;
 
+    const revealMatch = line.match(/reveal(?:s|ed)?\s*(?:at)?\s*(?:lvl\.?|level)\s*(\d+)/i);
+    if (revealMatch) {
+      const revealLevel = Number(revealMatch[1]);
+      const hiddenKey = `__hidden_${revealLevel}_${found.length}`;
+      if (!seen.has(hiddenKey)) {
+        seen.add(hiddenKey);
+        found.push({
+          stat: 'Hidden',
+          value: null,
+          raw: line,
+          hidden: true,
+          revealLevel,
+        });
+      }
+      return;
+    }
+
     const lineMatches = [];
     const statFirstPattern = /(Speed|Offense%|Offense|Health%|Health|Protection%|Protection|Defense%|Defense|Crit Chance%|Crit Dmg%|Crit Avoidance%|Potency%|Tenacity%|Accuracy%)\s*([+-]?\d+(?:\.\d+)?%?)/gi;
     const valueFirstPattern = /(?:\(\d+\)\s*)?([+-]?\d+(?:\.\d+)?%?)\s*(Speed|Offense%|Offense|Health%|Health|Protection%|Protection|Defense%|Defense|Crit Chance%|Crit Dmg%|Crit Avoidance%|Potency%|Tenacity%|Accuracy%)/gi;

@@ -399,6 +399,29 @@ function AppShell() {
         const dual = overlayRecommendation.buildOverlayRecommendations(analysis.parsed, {
           rawText: analysis?.rawText ?? '',
         });
+
+        const parsedShape = analysis.parsed.modShape;
+        if (parsedShape && parsedShape !== 'Not found') {
+          const prefillSecs = (analysis.parsed.secondaries || []).slice(0, 4).map(s => {
+            if (s?.hidden) {
+              return { stat: '', value: '', rolls: '', hidden: true };
+            }
+            const rawVal = String(s?.value ?? '').replace(/[+%]/g, '').trim();
+            return {
+              stat: s?.stat && s.stat !== 'Not found' ? s.stat : '',
+              value: rawVal,
+              rolls: s?.rolls != null && s.rolls > 0 ? String(s.rolls) : '',
+              hidden: false,
+            };
+          });
+          setSlicePrefill({
+            token: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            shape: parsedShape,
+            primary: analysis.parsed.primary && analysis.parsed.primary !== 'Not found' ? analysis.parsed.primary : '',
+            modSet: analysis.parsed.modSet && analysis.parsed.modSet !== 'Not found' ? analysis.parsed.modSet : '',
+            secondaries: prefillSecs,
+          });
+        }
         const needsReview = dual.slice.title === 'Capture Needs Review';
         const sliceBody = needsReview
           ? [

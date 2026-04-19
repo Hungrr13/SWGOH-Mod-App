@@ -13,6 +13,7 @@ import {
   SHAPES, SHAPE_PRIMARIES, MOD_SETS,
   SLICE_REF, secQualityColor,
   decodePrimary, decodeModSet,
+  MOD_TIERS, rollEfficiency, efficiencyColor, efficiencyLabel,
 } from '../constants/modData';
 import { CHARS as RAW_CHARS } from '../data/chars';
 import { evaluateSliceMod } from '../services/sliceEngine';
@@ -103,10 +104,10 @@ const SET_COLORS = {
 const NONE = '';
 
 const EMPTY_SECS = [
-  { stat: NONE, value: '' },
-  { stat: NONE, value: '' },
-  { stat: NONE, value: '' },
-  { stat: NONE, value: '' },
+  { stat: NONE, value: '', rolls: '', hidden: false },
+  { stat: NONE, value: '', rolls: '', hidden: false },
+  { stat: NONE, value: '', rolls: '', hidden: false },
+  { stat: NONE, value: '', rolls: '', hidden: false },
 ];
 
 function autoPrimaryForShape(shape) {
@@ -123,6 +124,7 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
   const [primary, setPrimary] = useState(NONE);
   const [modSet, setModSet]   = useState(NONE);
   const [secs, setSecs]       = useState(EMPTY_SECS);
+  const [tier, setTier]       = useState('5A');
   const [statModal, setStatModal] = useState(null);
   const [charsExpanded, setCharsExpanded] = useState(false);
 
@@ -154,9 +156,17 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
       shape,
       primary,
       modSet:      modSet || '',
-      secondaries: secs.map(s => ({ name: s.stat, val: s.value })),
+      secondaries: secs.map(s => ({
+        name: s.stat,
+        val: s.value,
+        rolls: s.rolls,
+        hidden: s.hidden,
+      })),
+      tier,
     });
-  }, [shape, primary, modSet, secs]);
+  }, [shape, primary, modSet, secs, tier]);
+
+  const dotLevel = tier && String(tier).startsWith('6') ? 6 : 5;
 
   // ── Per-stat quality rows (local, always available) ───────────────────────
   const secRows = secs.map((sec) => {
@@ -177,6 +187,7 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
     setPrimary(NONE);
     setModSet(NONE);
     setSecs(EMPTY_SECS);
+    setTier('5A');
     setCharsExpanded(false);
   };
 
@@ -196,6 +207,8 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
       return {
         stat: incoming.stat || NONE,
         value: incoming.value || '',
+        rolls: incoming.rolls ? String(incoming.rolls) : '',
+        hidden: !!incoming.hidden,
       };
     });
 
@@ -274,9 +287,27 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
             </>
           )}
 
+          <Text style={styles.label}>Current Tier</Text>
+          <View style={styles.tierRow}>
+            {MOD_TIERS.map(t => {
+              const active = tier === t;
+              return (
+                <TouchableOpacity
+                  key={t}
+                  style={[styles.tierPill, active && styles.tierPillActive]}
+                  onPress={() => setTier(t)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.tierPillText, active && styles.tierPillTextActive]}>{t}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
           <Text style={[styles.label, styles.secondaryLabel]}>Secondary Stats</Text>
           {secs.map((sec, i) => (
-            <View key={i} style={styles.secRow}>
+            <React.Fragment key={i}>
+            <View style={styles.secRow}>
               <TouchableOpacity
                 style={[
                   styles.statTrigger,
@@ -326,6 +357,45 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
                 />
               </View>
             </View>
+            {!result?.noBuildUse && (sec.stat || sec.hidden) && (
+              <View style={styles.secMetaRow}>
+                <Text style={styles.secMetaLabel}>Rolls</Text>
+                <View style={styles.rollPills}>
+                  {[1, 2, 3, 4, 5].map(n => {
+                    const active = String(sec.rolls) === String(n);
+                    return (
+                      <TouchableOpacity
+                        key={n}
+                        style={[styles.rollPill, active && styles.rollPillActive]}
+                        onPress={() => updateSec(i, 'rolls', active ? '' : String(n))}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.rollPillText, active && styles.rollPillTextActive]}>{n}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <TouchableOpacity
+                  style={[styles.hiddenToggle, sec.hidden && styles.hiddenToggleActive]}
+                  onPress={() => updateSec(i, 'hidden', !sec.hidden)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.hiddenToggleText, sec.hidden && styles.hiddenToggleTextActive]}>
+                    {sec.hidden ? 'Hidden' : 'Reveal?'}
+                  </Text>
+                </TouchableOpacity>
+                {sec.stat && sec.value !== '' && sec.rolls && (() => {
+                  const eff = rollEfficiency(sec.stat, sec.value, sec.rolls, dotLevel);
+                  if (eff === null) return null;
+                  return (
+                    <Text style={[styles.effText, { color: efficiencyColor(eff) }]}>
+                      {efficiencyLabel(eff)} {Math.round(eff * 100)}%
+                    </Text>
+                  );
+                })()}
+              </View>
+            )}
+          </React.Fragment>
           ))}
         </View>
 
@@ -339,6 +409,17 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
         {/* ── Engine Analysis ── */}
         {result && (
           <>
+            {/* Tier action */}
+            {result.tierAction && (
+              <View style={[styles.verdictCard, { borderColor: result.tierAction.actionColor }]}>
+                <Text style={[styles.verdictLabel, { color: result.tierAction.actionColor }]}>
+                  {result.tierAction.actionLabel}
+                </Text>
+                <Text style={styles.verdictScore}>Current tier: {tier}</Text>
+                <Text style={styles.verdictMeaning}>{result.tierAction.actionDesc}</Text>
+              </View>
+            )}
+
             {/* Decision */}
             <View style={[styles.verdictCard, { borderColor: decisionColor(result.decision) }]}>
               <Text style={[styles.verdictLabel, { color: decisionColor(result.decision) }]}>
@@ -558,7 +639,62 @@ const createStyles = colors => StyleSheet.create({
   secondaryLabel: {
     marginBottom: 2,
   },
+  tierRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 8,
+    flexWrap: 'wrap',
+  },
+  tierPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+  },
+  tierPillActive: {
+    borderColor: '#f5a623',
+    backgroundColor: '#3a2a12',
+  },
+  tierPillText: { color: colors.soft, fontSize: 12, fontWeight: '600' },
+  tierPillTextActive: { color: '#f5a623' },
   secRow: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 2 },
+  secMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+    marginTop: 2,
+    flexWrap: 'wrap',
+  },
+  secMetaLabel: { color: colors.muted, fontSize: 11, fontWeight: '600' },
+  rollPills: { flexDirection: 'row', gap: 4 },
+  rollPill: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceAlt,
+  },
+  rollPillActive: { borderColor: '#60a5fa', backgroundColor: '#122c3f' },
+  rollPillText: { color: colors.soft, fontSize: 11, fontWeight: '600' },
+  rollPillTextActive: { color: '#60a5fa' },
+  hiddenToggle: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+  },
+  hiddenToggleActive: { borderColor: '#f5a623', backgroundColor: '#3a2a12' },
+  hiddenToggleText: { color: colors.soft, fontSize: 11, fontWeight: '600' },
+  hiddenToggleTextActive: { color: '#f5a623' },
+  effText: { fontSize: 11, fontWeight: '700', marginLeft: 'auto' },
   statTrigger: {
     flex: 1,
     backgroundColor: colors.surfaceAlt,

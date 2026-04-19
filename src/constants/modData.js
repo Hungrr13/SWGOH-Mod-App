@@ -165,60 +165,69 @@ export const MOD_SETS = [
   'Speed','Offense','Crit Dmg','Crit Chance','Health','Defense','Potency','Tenacity',
 ];
 
-// ── Slice verdict logic ──────────────────────────────────────────────────────
-export function calcSliceVerdict(shape, secs) {
-  // secs = [{stat, value}] up to 4 entries
-  const filled = secs.filter(s => s.stat && s.value !== '');
+// ── Per-roll min/max and stat caps (5-dot + 6-dot) ──────────────────────────
+export const ROLL_DATA = {
+  'Speed':        { min5: 3,     max5: 6,     cap5: 30,    min6: 3,     max6: 6,    cap6: 31    },
+  'Offense':      { min5: 22.8,  max5: 45.6,  cap5: 228,   min6: 25,    max6: 50,   cap6: 251   },
+  'Offense%':     { min5: 0.281, max5: 0.563, cap5: 2.815, min6: 0.85,  max6: 1.7,  cap6: 8.5   },
+  'Health':       { min5: 214.3, max5: 428.6, cap5: 2143,  min6: 270,   max6: 540,  cap6: 2700  },
+  'Health%':      { min5: 0.563, max5: 1.125, cap5: 5.625, min6: 1,     max6: 2,    cap6: 10    },
+  'Protection':   { min5: 415.3, max5: 830.6, cap5: 4153,  min6: 460,   max6: 920,  cap6: 4600  },
+  'Protection%':  { min5: 1.125, max5: 2.25,  cap5: 11.25, min6: 1.5,   max6: 3,    cap6: 15    },
+  'Defense':      { min5: 4.9,   max5: 9.8,   cap5: 49,    min6: 8,     max6: 16,   cap6: 80    },
+  'Defense%':     { min5: 0.85,  max5: 1.70,  cap5: 8.5,   min6: 2,     max6: 4,    cap6: 20    },
+  'Crit Chance%': { min5: 1.125, max5: 2.25,  cap5: 11.25, min6: 1.175, max6: 2.35, cap6: 11.75 },
+  'Potency%':     { min5: 1.125, max5: 2.25,  cap5: 11.25, min6: 1.5,   max6: 3,    cap6: 15    },
+  'Tenacity%':    { min5: 1.125, max5: 2.25,  cap5: 11.25, min6: 1.5,   max6: 3,    cap6: 15    },
+};
 
-  let goodCount = 0;
-  let greatCount = 0;
-  let hasSpeed = false;
-  let speedVal = 0;
+// 5A → 6E percent boost — how much slicing to 6-dot multiplies the stat cap.
+// Drives whether a mod is worth the 6-dot material cost.
+export const SLICE_GAIN = {
+  'Offense%':     2.02,
+  'Defense%':     1.34,
+  'Health%':      0.78,
+  'Defense':      0.63,
+  'Potency%':     0.33,
+  'Tenacity%':    0.33,
+  'Protection%':  0.33,
+  'Health':       0.26,
+  'Protection':   0.11,
+  'Offense':      0.10,
+  'Crit Chance%': 0.04,
+  'Speed':        0.03,
+};
 
-  for (const { stat, value } of filled) {
-    const ref = SLICE_REF.find(r => r.s === stat);
-    if (!ref) continue;
-    const v = parseFloat(value);
-    if (isNaN(v)) continue;
-    if (v >= ref.gr) greatCount++;
-    else if (v >= ref.g) goodCount++;
-    if (stat === 'Speed') { hasSpeed = true; speedVal = v; }
-  }
-
-  // Auto-sell: 3+ flat base stats (Speed excluded — always valued)
-  const flatCount = filled.filter(({ stat }) => FLAT_STATS.has(stat)).length;
-  if (flatCount >= 3) {
-    return { label: 'SELL', color: '#f87171', desc: '3+ flat base stats – low ceiling, not worth keeping.' };
-  }
-
-  const isFixed = shape === 'Square' || shape === 'Diamond';
-  const isArrow = shape === 'Arrow';
-
-  // Speed arrow rules
-  if (isArrow && hasSpeed) {
-    if (greatCount >= 3) return { label: 'SLICE HIGH', color: '#4ade80', desc: 'Speed arrow with 3+ great stats – top priority to slice!' };
-    if (greatCount >= 2) return { label: 'SLICE', color: '#86efac', desc: 'Speed arrow with 2 great stats – good slice candidate.' };
-  }
-
-  // Non-arrow high-speed
-  if (!isFixed && hasSpeed && speedVal >= 20) {
-    return { label: 'SLICE TOP', color: '#4ade80', desc: 'High speed secondary – slice for maximum gain.' };
-  }
-  if (!isFixed && hasSpeed && speedVal >= 15) {
-    return { label: 'SLICE', color: '#86efac', desc: 'Decent speed – slice candidate.' };
-  }
-
-  // Great stats
-  if (greatCount >= 3) return { label: 'SLICE', color: '#86efac', desc: '3+ great stats – strong mod worth slicing.' };
-  if (greatCount >= 2 && goodCount >= 1) return { label: 'SLICE', color: '#86efac', desc: '2 great + 1 good – slice candidate.' };
-
-  // Fixed slots (Square/Diamond) – always useful
-  if (isFixed && filled.length > 0) return { label: 'KEEP', color: '#facc15', desc: 'Fixed primary slot – keep for set completion.' };
-
-  // Good but not great
-  if (goodCount >= 3 || greatCount >= 1) return { label: 'KEEP', color: '#facc15', desc: 'Solid stats – keep but lower slice priority.' };
-
-  if (filled.length === 0) return { label: '—', color: '#94a3b8', desc: 'Enter secondary stats to see the verdict.' };
-
-  return { label: 'SELL', color: '#f87171', desc: 'Weak stats – likely not worth keeping.' };
+// Roll efficiency 0..1 — Crouching-Rancor style.
+// Tells how well the N rolls behind a secondary performed relative to possible range.
+export function rollEfficiency(stat, value, rolls, dotLevel = 5) {
+  const data = ROLL_DATA[stat];
+  if (!data) return null;
+  const r = parseInt(rolls, 10);
+  const v = parseFloat(value);
+  if (!r || r <= 0 || isNaN(v)) return null;
+  const min = dotLevel === 6 ? data.min6 : data.min5;
+  const max = dotLevel === 6 ? data.max6 : data.max5;
+  const lo = r * min;
+  const hi = r * max;
+  if (hi === lo) return 1;
+  return Math.max(0, Math.min(1, (v - lo) / (hi - lo)));
 }
+
+export function efficiencyColor(eff) {
+  if (eff === null || eff === undefined) return '#e2e8f0';
+  if (eff >= 0.8) return '#c084fc';
+  if (eff >= 0.5) return '#60a5fa';
+  if (eff >= 0.2) return '#4ade80';
+  return '#f87171';
+}
+
+export function efficiencyLabel(eff) {
+  if (eff === null || eff === undefined) return '—';
+  if (eff >= 0.8) return 'Elite';
+  if (eff >= 0.5) return 'Good';
+  if (eff >= 0.2) return 'Weak';
+  return 'Min';
+}
+
+export const MOD_TIERS = ['5E', '5D', '5C', '5B', '5A', '6E'];

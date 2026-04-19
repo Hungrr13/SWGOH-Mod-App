@@ -1,5 +1,6 @@
 import { SLICE_RULES } from './sliceRules';
 import { SEC_FOCUS } from '../data/secFocus';
+import { rollEfficiency, SLICE_GAIN } from '../constants/modData';
 
 const FIXED_PRIMARY = {
   Square: "Offense%",
@@ -592,6 +593,150 @@ function getCeilingLabel(upsideScore) {
   return upsideScore >= 65 ? "HIGH CEILING" : "LOW CEILING";
 }
 
+// Tier-gated action label. Sits on top of the main finalScore.
+// Sell cases delegate to the main scoring (forcedsell / no users / low score).
+// Hidden-reveal secondaries override everything — the user must level to 12.
+function getTierAction({ tier, secondaries, shape, primary, finalScore, forcedsell, noBuildUse }) {
+  const hiddenCount = (secondaries || []).filter((s) => s && s.hidden).length;
+  if (hiddenCount > 0) {
+    return {
+      actionLabel: 'LEVEL TO 12',
+      actionColor: '#f5a623',
+      actionDesc: `${hiddenCount} hidden secondary${hiddenCount > 1 ? ' stats reveal' : ' reveals'} at lvl 3/6/9/12. Level the mod to 12 and rescan.`,
+    };
+  }
+
+  if (forcedsell || noBuildUse || finalScore < 30) {
+    return {
+      actionLabel: 'SELL',
+      actionColor: '#f87171',
+      actionDesc: forcedsell
+        ? '3+ flat base stats — low ceiling, not worth keeping.'
+        : noBuildUse
+          ? 'No characters want this shell.'
+          : 'Weak rolls — not worth further investment.',
+    };
+  }
+
+  const dotLevel = tier && String(tier).startsWith('6') ? 6 : 5;
+  const analyzed = (secondaries || [])
+    .filter((s) => s && s.name && s.val !== '' && parseInt(s.rolls, 10) > 0)
+    .map((s) => {
+      const eff = rollEfficiency(s.name, s.val, s.rolls, dotLevel);
+      const gain = SLICE_GAIN[s.name] ?? 0;
+      return { name: s.name, val: s.val, rolls: parseInt(s.rolls, 10), eff: eff ?? 0, gain };
+    });
+
+  const avgEff = analyzed.length ? analyzed.reduce((a, s) => a + s.eff, 0) / analyzed.length : 0;
+  const speed = analyzed.find((s) => s.name === 'Speed');
+  const highGain = analyzed.filter((s) => s.gain >= 0.5);
+  const strongHighGain = highGain.filter((s) => s.eff >= 0.7);
+  const isSpeedArrow = shape === 'Arrow' && primary === 'Speed';
+  const isFixed = shape === 'Square' || shape === 'Diamond';
+
+  // 5E / 5D — pre-reveal tiers; secondaries aren't all visible yet anyway.
+  // If main scoring didn't force a sell, level up cheap and rescan.
+  if (tier === '5E' || tier === '5D') {
+    const next = tier === '5E' ? '5D' : '5C';
+    return {
+      actionLabel: `SLICE → ${next}`,
+      actionColor: '#86efac',
+      actionDesc: `Early tier — cheap to level. Continue to ${next} and rescan once more secondaries reveal.`,
+    };
+  }
+
+  if (tier === '5C') {
+    if (speed || highGain.length >= 1 || avgEff >= 0.4) {
+      return {
+        actionLabel: 'SLICE → 5B',
+        actionColor: '#86efac',
+        actionDesc: speed
+          ? 'Speed secondary present — always worth climbing. Slice to 5B and rescan.'
+          : 'Early rolls promising — continue to 5B and rescan.',
+      };
+    }
+    if (isFixed) return { actionLabel: 'KEEP', actionColor: '#facc15', actionDesc: 'Fixed slot — keep for set completion.' };
+    return { actionLabel: 'SELL', actionColor: '#f87171', actionDesc: 'Weak early rolls — cut losses before 5B.' };
+  }
+
+  if (tier === '5B') {
+    const speedWorthy = speed && speed.eff >= 0.5 && speed.rolls >= 2;
+    if (avgEff >= 0.55 || speedWorthy || strongHighGain.length >= 1) {
+      return {
+        actionLabel: 'SLICE → 5A',
+        actionColor: '#86efac',
+        actionDesc: speedWorthy
+          ? `Speed at ${speed.val} across ${speed.rolls} rolls — finish the 5-dot climb.`
+          : 'Rolls trending well — finish the 5-dot climb.',
+      };
+    }
+    if (speed && speed.rolls === 1) {
+      return {
+        actionLabel: 'KEEP',
+        actionColor: '#facc15',
+        actionDesc: "Speed with only 1 roll — keep but don't commit to 5A yet.",
+      };
+    }
+    if (isFixed) return { actionLabel: 'KEEP', actionColor: '#facc15', actionDesc: 'Fixed slot — keep for set completion.' };
+    return { actionLabel: 'SELL', actionColor: '#f87171', actionDesc: 'Rolls too weak to justify 5A materials.' };
+  }
+
+  if (tier === '5A') {
+    if (isSpeedArrow && speed) {
+      return {
+        actionLabel: 'SLICE → 6E',
+        actionColor: '#4ade80',
+        actionDesc: 'Speed arrow with speed secondary — always worth 6-dot.',
+      };
+    }
+    if (speed && speed.rolls >= 3) {
+      return {
+        actionLabel: 'SLICE → 6E',
+        actionColor: '#4ade80',
+        actionDesc: `Speed hit ${speed.rolls} times already (value ${speed.val}) — high chance of more on 6-dot slice.`,
+      };
+    }
+    if (strongHighGain.length >= 1 && avgEff >= 0.55) {
+      const top = strongHighGain[0];
+      return {
+        actionLabel: 'SLICE → 6E',
+        actionColor: '#4ade80',
+        actionDesc: `${top.name} at ${Math.round(top.eff * 100)}% efficiency — 6-dot multiplies the cap by ${Math.round((1 + top.gain) * 100) / 100}×.`,
+      };
+    }
+    if (speed && speed.rolls >= 2 && speed.eff >= 0.5 && avgEff >= 0.55) {
+      return {
+        actionLabel: 'SLICE → 6E',
+        actionColor: '#4ade80',
+        actionDesc: `Speed at ${speed.val} (${speed.rolls} rolls) with solid overall efficiency — worth 6-dot.`,
+      };
+    }
+    if (speed && speed.rolls === 1) {
+      return {
+        actionLabel: 'KEEP',
+        actionColor: '#facc15',
+        actionDesc: "Speed only hit once — 6-dot gain is just +1 speed max (+3%). Don't burn 6-dot mats.",
+      };
+    }
+    if (avgEff >= 0.5 || isFixed) {
+      return {
+        actionLabel: 'KEEP',
+        actionColor: '#facc15',
+        actionDesc: "Solid 5A — usable, but efficiency doesn't justify 6-dot investment.",
+      };
+    }
+    return { actionLabel: 'SELL', actionColor: '#f87171', actionDesc: 'Rolled poorly — not worth 6-dot cost.' };
+  }
+
+  if (tier === '6E') {
+    if (avgEff >= 0.75) return { actionLabel: 'TOP TIER', actionColor: '#c084fc', actionDesc: 'Elite 6-dot mod — lock it on your best toon.' };
+    if (avgEff >= 0.5) return { actionLabel: 'KEEP', actionColor: '#facc15', actionDesc: 'Good 6-dot mod.' };
+    return { actionLabel: 'USABLE', actionColor: '#60a5fa', actionDesc: 'Average 6-dot — niche use only.' };
+  }
+
+  return { actionLabel: 'KEEP', actionColor: '#facc15', actionDesc: 'No tier selected.' };
+}
+
 function getNextHitNarrative(scoredStats) {
   if (!scoredStats.length) {
     return {
@@ -616,6 +761,7 @@ export function evaluateSliceMod({
   primary,
   modSet,
   secondaries,
+  tier,
 }) {
   const selectedPrimary = normalizeShapePrimary(shape, primary);
   const matches = findMatchingBuilds({ chars, shape, primary: selectedPrimary, modSet });
@@ -688,6 +834,17 @@ export function evaluateSliceMod({
   const decision = (forcedsell || noBuildUse) ? "SELL" : getDecisionLabel(finalScore);
   const ceiling = getCeilingLabel(upside);
   const nextHit = getNextHitNarrative(secondary.scoredStats);
+  const tierAction = tier
+    ? getTierAction({
+        tier,
+        secondaries,
+        shape,
+        primary: selectedPrimary,
+        finalScore,
+        forcedsell,
+        noBuildUse,
+      })
+    : null;
   const matchedCharacters = alignedMatches.map((m) => ({
     name: m.name,
     variant: m.variant,
@@ -736,5 +893,7 @@ export function evaluateSliceMod({
     noBuildUse,
     bestCaseNextHit: nextHit.bestCase,
     worstCaseNextHit: nextHit.worstCase,
+    tier: tier || null,
+    tierAction,
   };
 }
