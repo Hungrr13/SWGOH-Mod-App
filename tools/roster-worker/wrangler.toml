@@ -1,0 +1,7 @@
+name = "swgoh-roster-proxy"
+main = "worker.js"
+compatibility_date = "2026-03-01"
+
+# After `wrangler deploy`, your URL will be:
+#   https://swgoh-roster-proxy.<your-subdomain>.workers.dev/?allycode=123456789
+# Rename `name` above if you want a different subdomain.

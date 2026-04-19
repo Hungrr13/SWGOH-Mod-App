@@ -38,6 +38,7 @@ This is the current repo map after the cleanup pass. If you are not sure where t
 - `src/services/overlayCapture.js`: native Android overlay bridge.
 - `src/services/overlayRecommendation.js`: quick recommendation text for overlay results.
 - `src/services/modTemplateLibrary.js`: scanner template manifest hydration/status helper.
+- `src/services/rosterService.js`: fetches/caches a player's SWGOH roster via ally code (proxied swgoh.gg player API). Exports `fetchRoster`, `getCachedRoster`, `clearCachedRoster`, `ownedBaseIdSet`, `setRosterApiBase`.
 
 ## Canonical data
 
@@ -64,6 +65,7 @@ This is the current repo map after the cleanup pass. If you are not sure where t
 - `tools/set-classifier/model-debug/`: debug JSON/model output for set-classifier work.
 - `tools/slice-eval/run-slice-eval.mjs`: manual slice scorer sandbox script.
 - `tools/debug_out/`: pulled overlay debug output from device sessions.
+- `tools/roster-worker/`: Cloudflare Worker that proxies swgoh.gg's player API (bypasses Cloudflare's interactive bot challenge). Deploy with `wrangler deploy` from inside the folder.
 - `tools/*.js`: import, scraping, and data-refresh helpers.
 
 ## Current mod-shape status
@@ -103,6 +105,14 @@ This is the current repo map after the cleanup pass. If you are not sure where t
 - `mask-only` remains a last-resort fallback for when every guided candidate scores below the minimum confidence bar.
 
 ## Recent changes (April 2026)
+
+### Roster service (step 1 of ally-code integration)
+- New `src/services/rosterService.js`. Takes an ally code, returns a normalized `{ playerName, roster: { BASE_ID: { stars, gearLevel, relicTier, isGL, ... } }, unitCount, timestamp, fromCache }`.
+- Caches in AsyncStorage when `@react-native-async-storage/async-storage` is installed; falls back to an in-process Map otherwise. Default TTL 6 hours, overridable via `fetchRoster(code, { ttlMs })` or bypass via `{ forceRefresh: true }`.
+- API base is configurable via `setRosterApiBase(url)`. Default is `https://swgoh.gg/api/player/` but that endpoint is behind Cloudflare's interactive bot challenge — direct calls from RN will fail. Point at a proxy worker instead (see below).
+- Relic conversion follows swgoh.gg's offset: `relic_tier ≥ 2` → `relic_tier - 1`, anything lower → 0.
+- New `tools/roster-worker/`: ~40-line Cloudflare Worker that proxies `swgoh.gg/api/player/<ally>/`. Deploy with `wrangler deploy`; then call `setRosterApiBase('https://<your-subdomain>.workers.dev/?allycode=')`. Free tier covers vastly more than we'll ever use.
+- Not yet wired into any screen or the overlay recommendation pipeline — that's step 3 (`chars.js` `baseId` annotation) and step 4 (filter `DECODED_CHARS` by owned set inside `buildOverlayRecommendation*`).
 
 ### Set classifier: ZNCC template matching with peak-aware crop selection
 - Replaced the mask-based set-symbol classifier with zero-mean normalized cross-correlation (ZNCC) on raw grayscale templates. Booleanized 64×64 masks threw away too much information; fist (Tenacity) and crosshair (Potency) both collapsed into ambiguous blobs and misclassifications cycled through Potency → Health → Speed → Crit Dmg before ever resolving to the correct Tenacity.
