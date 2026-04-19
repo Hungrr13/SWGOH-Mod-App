@@ -1,6 +1,28 @@
-import { SLICE_REF, decodeModSet, decodePrimary } from '../constants/modData';
+import { SLICE_REF, decodeModSet, decodePrimary, ROLL_DATA } from '../constants/modData';
 import { CHARS as RAW_CHARS } from '../data/chars';
 import { evaluateSliceMod } from './sliceEngine';
+
+// Estimate a secondary's roll count from its numeric value when the (N)
+// prefix was missed by OCR. Returns null when the stat isn't in ROLL_DATA
+// or the value can't be parsed.
+function estimateRolls(stat, value, dotLevel = 5) {
+  const data = ROLL_DATA[stat];
+  if (!data) return null;
+  const v = parseFloat(String(value ?? '').replace(/[^\d.]/g, ''));
+  if (!Number.isFinite(v) || v <= 0) return null;
+  const min = dotLevel === 6 ? data.min6 : data.min5;
+  const max = dotLevel === 6 ? data.max6 : data.max5;
+  for (let n = 1; n <= 5; n++) {
+    if (v <= n * max * 1.02) return n;
+  }
+  return 5;
+}
+
+function resolveRolls(s) {
+  const explicit = parseInt(s?.rolls, 10);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  return estimateRolls(s?.stat, s?.value);
+}
 
 const seen = new Set();
 const DECODED_CHARS = RAW_CHARS.filter(c => {
@@ -68,16 +90,16 @@ export function buildOverlayRecommendation(parsed, options = {}) {
   }
 
   const hiddenEntries = (parsed.secondaries || []).filter(s => s?.hidden);
-  const visibleWithRolls = (parsed.secondaries || []).filter(s =>
-    s && !s.hidden && s.stat && s.stat !== 'Not found'
-    && Number.isFinite(parseInt(s.rolls, 10)) && parseInt(s.rolls, 10) > 0
-  );
+  const visibleWithRolls = (parsed.secondaries || [])
+    .filter(s => s && !s.hidden && s.stat && s.stat !== 'Not found')
+    .map(s => ({ ...s, _rolls: resolveRolls(s) }))
+    .filter(s => Number.isFinite(s._rolls) && s._rolls > 0);
   const allSingleRoll = visibleWithRolls.length >= 1
-    && visibleWithRolls.every(s => parseInt(s.rolls, 10) === 1);
+    && visibleWithRolls.every(s => s._rolls === 1);
   const secondaries = normalizeSecondaries(parsed.secondaries);
   const hiddenLevels = [...new Set(hiddenEntries.map(h => h.revealLevel).filter(Boolean))].sort((a, b) => a - b);
   const hiddenNote = hiddenEntries.length
-    ? `Level this mod to 12 and rescan for slice advice.${hiddenLevels.length ? ` (${hiddenEntries.length} hidden secondary reveals at lvl ${hiddenLevels.join('/')}.)` : ''}`
+    ? 'Level this mod to 12 and rescan for slice advice.'
     : null;
   const needsLeveling = hiddenEntries.length > 0 || allSingleRoll;
 
@@ -202,16 +224,15 @@ export function buildOverlayRecommendations(parsed, options = {}) {
   const topMatches = result.matchedCharacters.slice(0, 6);
   const noUsers = topMatches.length === 0;
   const hasHidden = hiddenEntries.length > 0;
-  const visibleWithRollsDual = (parsed.secondaries || []).filter(s =>
-    s && !s.hidden && s.stat && s.stat !== 'Not found'
-    && Number.isFinite(parseInt(s.rolls, 10)) && parseInt(s.rolls, 10) > 0
-  );
+  const visibleWithRollsDual = (parsed.secondaries || [])
+    .filter(s => s && !s.hidden && s.stat && s.stat !== 'Not found')
+    .map(s => ({ ...s, _rolls: resolveRolls(s) }))
+    .filter(s => Number.isFinite(s._rolls) && s._rolls > 0);
   const allSingleRollDual = visibleWithRollsDual.length >= 1
-    && visibleWithRollsDual.every(s => parseInt(s.rolls, 10) === 1);
+    && visibleWithRollsDual.every(s => s._rolls === 1);
   const needsLevel = hasHidden || allSingleRollDual;
-  const hiddenLvls = [...new Set(hiddenEntries.map(h => h.revealLevel).filter(Boolean))].sort((a, b) => a - b);
   const levelBody = hasHidden
-    ? `Level this mod to 12 and rescan for slice advice.${hiddenLvls.length ? ` (${hiddenEntries.length} hidden secondary reveals at lvl ${hiddenLvls.join('/')}.)` : ''}`
+    ? 'Level this mod to 12 and rescan for slice advice.'
     : 'Every visible secondary still at (1) — level the mod to 12 and rescan for slice advice.';
 
   const sliceTitle = noUsers
