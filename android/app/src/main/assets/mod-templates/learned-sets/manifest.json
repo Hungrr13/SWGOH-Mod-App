@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-19T16:59:33.486Z",
+  "generatedAt": "2026-04-19T17:21:33.277Z",
   "sourceDir": "tools\\set-classifier\\debug-crops",
   "labelsPath": "tools\\set-classifier\\debug-crops\\set-labels.json",
   "samples": [
@@ -834,6 +834,14 @@
       "notes": "",
       "source": "Triangle Sets/1776616985375-set-tenacity.png",
       "relativePath": "triangle/tenacity/1776616985375-set-tenacity.png"
+    },
+    {
+      "file": "Triangle Sets/1776618961857-set-offense.png",
+      "set": "Offense",
+      "profile": "triangle",
+      "notes": "",
+      "source": "Triangle Sets/1776618961857-set-offense.png",
+      "relativePath": "triangle/offense/1776618961857-set-offense.png"
     }
   ]
 }
