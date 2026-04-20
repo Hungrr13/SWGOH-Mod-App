@@ -1027,10 +1027,30 @@ class ModIconClassifier(private val context: Context) {
         else -> sourceMat.copyTo(grayMat)
       }
 
+      val portraitBubblePresent = hasPlayerPortraitBubble(sourceMat)
+      Log.d(TAG, "detectShapeSyntheticContour: portraitBubblePresent=$portraitBubblePresent size=${grayMat.width()}x${grayMat.height()}")
+
       blurMat = Mat()
       Imgproc.GaussianBlur(grayMat, blurMat, Size(5.0, 5.0), 0.0)
       edgeMat = Mat()
       Imgproc.Canny(blurMat, edgeMat, 45.0, 135.0)
+      // TEMP DIAGNOSTIC: erase edges in the bottom-left ellipse unconditionally
+      // so we can see if the ellipse geometry is right. Revert to
+      // `if (portraitBubblePresent)` once confirmed.
+      run {
+        val widthD = edgeMat.width().toDouble()
+        val heightD = edgeMat.height().toDouble()
+        Imgproc.ellipse(
+          edgeMat,
+          Point(widthD * 0.18, heightD * 0.82),
+          Size(widthD * 0.30, heightD * 0.34),
+          0.0,
+          0.0,
+          360.0,
+          Scalar(0.0),
+          -1,
+        )
+      }
       kernelMat = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, Size(3.0, 3.0))
       edgeMorphMat = Mat()
       Imgproc.morphologyEx(edgeMat, edgeMorphMat, Imgproc.MORPH_CLOSE, kernelMat)
@@ -5093,7 +5113,9 @@ class ModIconClassifier(private val context: Context) {
   ) {
     if (debugText.isNullOrBlank()) return
     try {
-      val debugDir = File(context.cacheDir, "overlay-debug").apply {
+      val externalRoot = context.getExternalFilesDir(null)
+      val debugDir = (if (externalRoot != null) File(externalRoot, "overlay-debug")
+                      else File(context.cacheDir, "overlay-debug")).apply {
         if (!exists()) mkdirs()
       }
       if (observedMask != null) {

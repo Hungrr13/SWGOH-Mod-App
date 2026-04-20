@@ -14,10 +14,17 @@ $files = @(
   'shape-classifier-observed-circle-boundary.png'
 )
 
+$extBase = "/sdcard/Android/data/com.hungrr13.modhelper/files/overlay-debug"
 foreach ($name in $files) {
   $dest = Join-Path $outDir $name
-  $remote = "cache/overlay-debug/$name"
-  & $adb -s $serial exec-out run-as com.hungrr13.modhelper cat $remote > $dest
+  & $adb -s $serial pull "$extBase/$name" $dest 2>$null | Out-Null
+}
+# Also pull all candidate overlay/mask/outline PNGs
+$extList = & $adb -s $serial shell "ls $extBase" 2>$null
+$candidates = $extList | Select-String '^shape-classifier-candidate-.*\.png$' | ForEach-Object { $_.Matches[0].Value }
+foreach ($name in $candidates) {
+  $dest = Join-Path $outDir $name
+  & $adb -s $serial pull "$extBase/$name" $dest 2>$null | Out-Null
 }
 
 $listing = & $adb -s $serial shell run-as com.hungrr13.modhelper ls cache/overlay-debug 2>$null

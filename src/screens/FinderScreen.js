@@ -594,7 +594,7 @@ export default function FinderScreen({ isActive = true, overlayPrefill = null, o
                   }}
                   activeOpacity={0.7}
                 >
-                  <ModShapeIcon shape={s} size={22} />
+                  <ModShapeIcon shape={s} size={28} />
                   <Text style={[styles.shapeCellText, active && { color }]}>{s}</Text>
                 </TouchableOpacity>
               );

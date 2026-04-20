@@ -141,7 +141,7 @@ export default function AllyCodePanel() {
       <View style={[styles.inputRow, !rosterUnlocked && styles.inputRowDisabled]} pointerEvents={rosterUnlocked ? 'auto' : 'none'}>
         <TextInput
           style={styles.input}
-          placeholder="e.g. 489-758-819"
+          placeholder="e.g. 123-456-789"
           placeholderTextColor={theme.muted}
           keyboardType="number-pad"
           value={input}

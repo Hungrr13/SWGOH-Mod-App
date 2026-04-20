@@ -65,7 +65,7 @@ This is the current repo map after the cleanup pass. If you are not sure where t
 - `tools/set-classifier/training-data/`: generated set-classifier dataset. Rebuild with `npm run export:set-dataset`.
 - `tools/set-classifier/model-debug/`: debug JSON/model output for set-classifier work.
 - `tools/slice-eval/run-slice-eval.mjs`: manual slice scorer sandbox script.
-- `tools/debug_out/`: pulled overlay debug output from device sessions.
+- `tools/debug_out/`: pulled overlay debug output from device sessions. Shape-classifier debug bitmaps and `shape-classifier-observed-debug.txt` are now written by the app to `<getExternalFilesDir>/overlay-debug/`, so `tools/pull_debug.ps1` pulls them via plain `adb pull` (works on release builds; no `run-as` required).
 - `tools/roster-worker/`: Cloudflare Worker that proxies swgoh.gg's player API (bypasses Cloudflare's interactive bot challenge). Deploy with `wrangler deploy` from inside the folder.
 - `tools/*.js`: import, scraping, and data-refresh helpers.
 
