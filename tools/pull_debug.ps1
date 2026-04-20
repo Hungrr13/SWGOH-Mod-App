@@ -3,7 +3,7 @@ param(
   [switch]$All     # also pull per-scan focused/stats/shape/icon/set PNGs
 )
 
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Continue'
 $adb = 'C:\Users\Chad\AppData\Local\Android\Sdk\platform-tools\adb.exe'
 $serial = 'R5CX10W4LJY'
 $outDir = 'C:\Users\Chad\my-app\tools\debug_out'

@@ -75,8 +75,8 @@ const rows = [
   todoRow(
     'IN PROGRESS',
     'Shape classifier',
-    'Verify Circle-reads-as-Cross fix — diagnostic Canny edge-blank in bottom-left ellipse (unconditional, remove portrait-bubble guard)',
-    'Release APK rebuilt 2026-04-20 18:41 with diagnostic + debug-dir relocation. Need fresh scan with new APK. Pulls kept crashing the chat with large PNGs — see Tooling row.',
+    'Grievous-Circle: mask-only candidate now scores Circle:0.97 and the override picks it (stronglyRound=true). BUT top-level scoring adds +0.7 to Diamond via shapeDiamondCornerScore=0.92, pushing Diamond (1.02) over Circle (0.97). Find the Diamond corner-bonus stacking step and gate it on !stronglyRound / on winning candidate being mask-only.',
+    'Binary-mask portrait erase + mask-only \u2265 0.85 override landed 2026-04-20 19:02. Next: grep for shapeDiamondCornerScore / where final Top1 deviates from candidate Top1 and suppress the corner bonus when the winning candidate has stronglyRound.',
   ),
   todoRow(
     'OPEN',
@@ -125,6 +125,18 @@ const rows = [
     'Slice screen / scoring',
     'Investigate suggestion scoring — likely only comparing set + primary, ignoring secondaries',
     'Audit scoring path. Secondaries should weight into fit score; otherwise suggestions are noisy.',
+  ),
+  todoRow(
+    'OPEN',
+    'Scan performance',
+    'Increase overall scan speed on the overlay capture flow',
+    'Focused/stats/shape/icon/set crops + two classifiers (set + shape) run sequentially per mod. Profile the hot path and see what can be parallelized or cached between mods on the same screen.',
+  ),
+  todoRow(
+    'OPEN',
+    'Scan UX',
+    'First scan-button press is swallowed when the screen was just swapped \u2014 user has to click twice',
+    'Likely the overlay/capture service isn\u2019t fully bound when the first tap lands. Check listener wiring in ModOverlayCaptureService / CaptureScreen so the first tap either queues until ready or the button stays disabled until bind completes.',
   ),
   todoRow(
     'OPEN',
