@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, Animated, Easing } from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { View, Text, StyleSheet, Animated, Easing, Image, Dimensions } from "react-native";
 
 const STATUS_PHRASES = [
   "Starting thrusters",
@@ -14,10 +14,72 @@ const STATUS_PHRASES = [
   "Reticulating parsecs",
 ];
 
+const STAR_COUNT = 70;
+const STAR_COLORS = ["#d7e7ff", "#c1dcff", "#fef3c7", "#a5f3fc", "#ffffff"];
+
+function generateStars(width, height) {
+  const stars = [];
+  for (let i = 0; i < STAR_COUNT; i++) {
+    stars.push({
+      id: i,
+      x: Math.random() * width,
+      y: Math.random() * height,
+      size: 1 + Math.random() * 2.6,
+      color: STAR_COLORS[Math.floor(Math.random() * STAR_COLORS.length)],
+      baseOpacity: 0.25 + Math.random() * 0.55,
+      twinkleDuration: 800 + Math.random() * 2200,
+      delay: Math.random() * 2000,
+    });
+  }
+  return stars;
+}
+
+function TwinkleStar({ star }) {
+  const opacity = useRef(new Animated.Value(star.baseOpacity)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: Math.min(1, star.baseOpacity + 0.55),
+          duration: star.twinkleDuration,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: Math.max(0.1, star.baseOpacity - 0.25),
+          duration: star.twinkleDuration,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    const timeout = setTimeout(() => loop.start(), star.delay);
+    return () => {
+      clearTimeout(timeout);
+      loop.stop();
+    };
+  }, [opacity, star]);
+
+  return (
+    <Animated.View
+      style={{
+        position: "absolute",
+        left: star.x,
+        top: star.y,
+        width: star.size,
+        height: star.size,
+        borderRadius: star.size,
+        backgroundColor: star.color,
+        opacity,
+      }}
+    />
+  );
+}
+
 export default function LoadingScreen() {
   const pulse = useRef(new Animated.Value(0.95)).current;
   const fade = useRef(new Animated.Value(0.45)).current;
-  const spin = useRef(new Animated.Value(0)).current;
   const drift = useRef(new Animated.Value(0)).current;
   const phraseOpacity = useRef(new Animated.Value(1)).current;
   const [phraseIndex, setPhraseIndex] = useState(
@@ -26,6 +88,11 @@ export default function LoadingScreen() {
   const [rosterStage, setRosterStage] = useState(0);
   const [buildStage, setBuildStage] = useState(0);
   const [sliceStage, setSliceStage] = useState(0);
+
+  const stars = useMemo(() => {
+    const { width, height } = Dimensions.get("window");
+    return generateStars(width, height);
+  }, []);
 
   useEffect(() => {
     const rand = (min, max) => min + Math.random() * (max - min);
@@ -81,15 +148,6 @@ export default function LoadingScreen() {
     ).start();
 
     Animated.loop(
-      Animated.timing(spin, {
-        toValue: 1,
-        duration: 2200,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    ).start();
-
-    Animated.loop(
       Animated.sequence([
         Animated.timing(drift, {
           toValue: 1,
@@ -105,7 +163,7 @@ export default function LoadingScreen() {
         }),
       ])
     ).start();
-  }, [pulse, fade, spin, drift]);
+  }, [pulse, fade, drift]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -134,49 +192,35 @@ export default function LoadingScreen() {
     return () => clearInterval(interval);
   }, [phraseOpacity]);
 
-  const spinInterpolate = spin.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["0deg", "360deg"],
-  });
-
   const driftInterpolate = drift.interpolate({
     inputRange: [0, 1],
-    outputRange: ["0deg", "8deg"],
+    outputRange: ["-3deg", "3deg"],
   });
 
   return (
     <View style={styles.container}>
-      <View style={styles.star1} />
-      <View style={styles.star2} />
-      <View style={styles.star3} />
-      <View style={styles.star4} />
-      <View style={styles.star5} />
+      {stars.map(star => (
+        <TwinkleStar key={star.id} star={star} />
+      ))}
       <View style={styles.glowOrb} />
 
       <Animated.View
         style={[
-          styles.coreWrap,
+          styles.markWrap,
           {
             transform: [{ scale: pulse }, { rotate: driftInterpolate }],
           },
         ]}
       >
-        <View style={styles.coreOuter}>
-          <Animated.View
-            style={[
-              styles.coreRing,
-              {
-                transform: [{ rotate: spinInterpolate }],
-              },
-            ]}
-          />
-          <View style={styles.coreInner}>
-            <Text style={styles.coreText}>MG</Text>
-          </View>
-        </View>
+        <Image
+          source={require("../../assets/adaptive-icon.png")}
+          style={styles.markImage}
+          resizeMode="contain"
+        />
       </Animated.View>
 
-      <Text style={styles.title}>Mod Guide</Text>
+      <Text style={styles.title}>ModForge</Text>
+      <Text style={styles.tagline}>Mod Optimizer for SWGOH</Text>
 
       <View style={styles.statusPanel}>
         <View style={styles.statusRow}>
@@ -221,7 +265,7 @@ export default function LoadingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#070b14",
+    backgroundColor: "#070b18",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 24,
@@ -229,120 +273,37 @@ const styles = StyleSheet.create({
   },
   glowOrb: {
     position: "absolute",
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-    backgroundColor: "rgba(65, 145, 255, 0.08)",
+    width: 320,
+    height: 320,
+    borderRadius: 160,
+    backgroundColor: "rgba(99, 102, 241, 0.10)",
   },
-  star1: {
-    position: "absolute",
-    top: "18%",
-    left: "20%",
-    width: 3,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: "#d7e7ff",
-    opacity: 0.8,
-  },
-  star2: {
-    position: "absolute",
-    top: "28%",
-    right: "18%",
-    width: 2,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: "#c1dcff",
-    opacity: 0.7,
-  },
-  star3: {
-    position: "absolute",
-    top: "62%",
-    left: "16%",
-    width: 2,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: "#d7e7ff",
-    opacity: 0.75,
-  },
-  star4: {
-    position: "absolute",
-    bottom: "24%",
-    right: "22%",
-    width: 3,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: "#cde0ff",
-    opacity: 0.7,
-  },
-  star5: {
-    position: "absolute",
-    bottom: "18%",
-    left: "28%",
-    width: 2,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: "#d7e7ff",
-    opacity: 0.6,
-  },
-  coreWrap: {
-    marginBottom: 26,
-  },
-  coreOuter: {
-    width: 112,
-    height: 112,
-    borderRadius: 56,
-    borderWidth: 1,
-    borderColor: "rgba(114, 184, 255, 0.35)",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(12, 19, 34, 0.85)",
-    shadowColor: "#4fa3ff",
-    shadowOpacity: 0.35,
-    shadowRadius: 18,
+  markWrap: {
+    marginBottom: 18,
+    shadowColor: "#22d3ee",
+    shadowOpacity: 0.45,
+    shadowRadius: 22,
     shadowOffset: { width: 0, height: 0 },
     elevation: 10,
   },
-  coreRing: {
-    position: "absolute",
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    borderWidth: 2,
-    borderColor: "rgba(98, 175, 255, 0.65)",
-    borderTopColor: "#d8eeff",
-    borderRightColor: "rgba(98, 175, 255, 0.2)",
-    borderBottomColor: "rgba(98, 175, 255, 0.65)",
-    borderLeftColor: "rgba(98, 175, 255, 0.2)",
-  },
-  coreInner: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: "#111a2d",
-    borderWidth: 1,
-    borderColor: "rgba(160, 209, 255, 0.3)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  coreText: {
-    color: "#e7f4ff",
-    fontSize: 24,
-    fontWeight: "800",
-    letterSpacing: 2,
+  markImage: {
+    width: 168,
+    height: 168,
   },
   title: {
-    color: "#eef7ff",
-    fontSize: 28,
-    fontWeight: "700",
-    marginBottom: 24,
-    letterSpacing: 0.5,
+    color: "#f8fafc",
+    fontSize: 32,
+    fontWeight: "800",
+    letterSpacing: 2,
+    marginBottom: 4,
   },
-  subtitle: {
-    color: "#8fb8e6",
-    fontSize: 15,
-    textAlign: "center",
-    marginBottom: 24,
-    minHeight: 20,
+  tagline: {
+    color: "#94a3b8",
+    fontSize: 12,
+    letterSpacing: 6,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    marginBottom: 22,
   },
   statusPanel: {
     width: "100%",

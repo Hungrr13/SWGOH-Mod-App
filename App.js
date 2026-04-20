@@ -11,7 +11,6 @@ import {
   StatusBar,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -20,6 +19,9 @@ LogBox.ignoreAllLogs();
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { AppThemeProvider, useAppTheme, useThemeControls } from './src/theme/appTheme';
 import * as rosterState from './src/services/rosterState';
+import * as premiumState from './src/services/premiumState';
+import AdBanner from './src/components/AdBanner';
+import { maybeShowColdStartInterstitial } from './src/services/interstitialAds';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -91,6 +93,17 @@ function GuideModalHost(props) {
   return Screen ? <Screen {...props} /> : null;
 }
 
+function PremiumModalHost(props) {
+  let Screen = null;
+  try {
+    const mod = require('./src/components/PremiumModal');
+    Screen = mod?.default ?? mod ?? null;
+  } catch (error) {
+    Screen = null;
+  }
+  return Screen ? <Screen {...props} /> : null;
+}
+
 const TABS = [
   { key: 'Lookup', title: 'Hero Lookup', label: 'Lookup', icon: '🔍', component: renderLookupScreen },
   { key: 'Finder', title: 'Mod Finder', label: 'Finder', icon: '⚙', component: renderFinderScreen },
@@ -98,7 +111,7 @@ const TABS = [
   { key: 'Scanner', title: 'Mod Scanner', label: 'Scanner', icon: '📸', component: renderOverlayCaptureScreen },
 ];
 
-function AppMenu({ visible, onClose, onOpenGuide, onOpenScanner, onOpenAllyCode, onToggleTheme, isDark }) {
+function AppMenu({ visible, onClose, onOpenGuide, onOpenPremium, onToggleTheme, isDark, isPremium }) {
   const theme = useAppTheme();
   const styles = useMemo(() => createMenuStyles(theme), [theme]);
 
@@ -108,6 +121,19 @@ function AppMenu({ visible, onClose, onOpenGuide, onOpenScanner, onOpenAllyCode,
         <View style={styles.menuCard}>
           <Text style={styles.menuTitle}>Options</Text>
           <TouchableOpacity
+            style={[styles.menuButton, styles.premiumButton]}
+            onPress={() => {
+              onClose();
+              onOpenPremium();
+            }}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.premiumButtonIcon}>⭐</Text>
+            <Text style={styles.premiumButtonText}>
+              {isPremium ? 'Premium · Active' : 'Upgrade to Premium'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={styles.menuButton}
             onPress={() => {
               onClose();
@@ -116,26 +142,6 @@ function AppMenu({ visible, onClose, onOpenGuide, onOpenScanner, onOpenAllyCode,
             activeOpacity={0.8}
           >
             <Text style={styles.menuButtonText}>Guide Me</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.menuButton}
-            onPress={() => {
-              onClose();
-              onOpenScanner();
-            }}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.menuButtonText}>Open Scanner Tab</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.menuButton}
-            onPress={() => {
-              onClose();
-              onOpenAllyCode();
-            }}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.menuButtonText}>Set Ally Code</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.menuButton}
@@ -158,131 +164,6 @@ function AppMenu({ visible, onClose, onOpenGuide, onOpenScanner, onOpenAllyCode,
             <Text style={styles.menuButtonText}>Quit App</Text>
           </TouchableOpacity>
         </View>
-      </Pressable>
-    </Modal>
-  );
-}
-
-function AllyCodeModal({ visible, onClose }) {
-  const theme = useAppTheme();
-  const styles = useMemo(() => createAllyCodeStyles(theme), [theme]);
-
-  const [input, setInput] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState(null);
-  const [snapshot, setSnapshot] = useState(() => rosterState.getSnapshot());
-
-  useEffect(() => {
-    if (!visible) return;
-    setSnapshot(rosterState.getSnapshot());
-    setStatus(null);
-    const unsub = rosterState.subscribe(setSnapshot);
-    return unsub;
-  }, [visible]);
-
-  const handleLoad = async () => {
-    const digits = input.replace(/\D/g, '');
-    if (digits.length !== 9) {
-      setStatus({ kind: 'err', text: 'Ally code must be 9 digits.' });
-      return;
-    }
-    setBusy(true);
-    setStatus({ kind: 'info', text: 'Fetching roster…' });
-    try {
-      const payload = await rosterState.setAllyCode(digits, { forceRefresh: true });
-      setStatus({
-        kind: 'ok',
-        text: `Loaded ${payload.unitCount} units for ${payload.playerName || 'player'}.`,
-      });
-      setInput('');
-    } catch (e) {
-      setStatus({ kind: 'err', text: e?.message || 'Fetch failed.' });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleClear = async () => {
-    setBusy(true);
-    try {
-      await rosterState.clearAllyCode();
-      setStatus({ kind: 'info', text: 'Ally code cleared.' });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={styles.card} onPress={() => {}}>
-          <Text style={styles.title}>Ally Code</Text>
-          <Text style={styles.subtitle}>
-            Link your roster so mod recommendations skip characters you don't own.
-          </Text>
-          {snapshot.hasRoster ? (
-            <View style={styles.statusBlock}>
-              <Text style={styles.statusLabel}>Current</Text>
-              <Text style={styles.statusValue}>
-                {snapshot.playerName || '—'} ({snapshot.allyCode})
-              </Text>
-              <Text style={styles.statusSub}>
-                {snapshot.ownedCount} owned · updated{' '}
-                {new Date(snapshot.timestamp).toLocaleString()}
-              </Text>
-            </View>
-          ) : (
-            <Text style={styles.statusSub}>No roster linked yet.</Text>
-          )}
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. 489-758-819"
-            placeholderTextColor={theme.muted}
-            keyboardType="number-pad"
-            value={input}
-            onChangeText={setInput}
-            editable={!busy}
-            maxLength={13}
-          />
-          {status ? (
-            <Text
-              style={[
-                styles.msg,
-                status.kind === 'err' && { color: '#f87171' },
-                status.kind === 'ok' && { color: '#34d399' },
-              ]}
-            >
-              {status.text}
-            </Text>
-          ) : null}
-          <View style={styles.actions}>
-            <TouchableOpacity
-              style={[styles.button, styles.buttonPrimary, busy && styles.buttonDisabled]}
-              onPress={handleLoad}
-              disabled={busy}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.buttonText}>{busy ? 'Working…' : snapshot.hasRoster ? 'Refresh Roster' : 'Load Roster'}</Text>
-            </TouchableOpacity>
-            {snapshot.hasRoster ? (
-              <TouchableOpacity
-                style={[styles.button, styles.buttonSecondary]}
-                onPress={handleClear}
-                disabled={busy}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.buttonText}>Clear</Text>
-              </TouchableOpacity>
-            ) : null}
-            <TouchableOpacity
-              style={[styles.button, styles.buttonSecondary]}
-              onPress={onClose}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.buttonText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </Pressable>
       </Pressable>
     </Modal>
   );
@@ -443,13 +324,18 @@ function AppShell() {
   const styles = useMemo(() => createShellStyles(theme), [theme]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
-  const [allyCodeOpen, setAllyCodeOpen] = useState(false);
+  const [premiumOpen, setPremiumOpen] = useState(false);
+  const [premiumSnap, setPremiumSnap] = useState(() => premiumState.getSnapshot());
+
+  useEffect(() => {
+    setPremiumSnap(premiumState.getSnapshot());
+    return premiumState.subscribe(setPremiumSnap);
+  }, []);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [finderPrefill, setFinderPrefill] = useState(null);
   const [slicePrefill, setSlicePrefill] = useState(null);
   const [isWarmingUp, setIsWarmingUp] = useState(true);
   const sceneHostRef = useRef(null);
-  const scannerTabIndex = TABS.findIndex(tab => tab.key === 'Scanner');
 
   useEffect(() => {
     setMenuOpen(false);
@@ -486,6 +372,23 @@ function AppShell() {
         await rosterState.hydrate();
       } catch (error) {
         // roster hydration is best-effort — overlay still works without it
+      }
+      try {
+        await premiumState.hydrate();
+      } catch (error) {
+        // premium hydration is best-effort — defaults to locked
+      }
+      // Cold-start interstitial: capped to once per 6h. Awaited here so the
+      // ad shows OVER the loading screen rather than jumping in after the
+      // home UI has already rendered (which felt jarring). Hard-cap at 4s
+      // so a slow ad load never traps the user on the splash.
+      try {
+        await Promise.race([
+          maybeShowColdStartInterstitial(),
+          new Promise(resolve => setTimeout(resolve, 4000)),
+        ]);
+      } catch (_e) {
+        // ignore — never block startup on an ad failure
       }
       finish();
     })();
@@ -637,6 +540,8 @@ function AppShell() {
           />
         </View>
 
+        {TABS[activeTabIndex]?.key !== 'Scanner' ? <AdBanner /> : null}
+
         <View style={styles.tabBar}>
           {TABS.map((tab, index) => {
             const focused = index === activeTabIndex;
@@ -663,13 +568,13 @@ function AppShell() {
           visible={menuOpen}
           onClose={() => setMenuOpen(false)}
           onOpenGuide={() => setGuideOpen(true)}
-          onOpenScanner={() => setActiveTabIndex(scannerTabIndex)}
-          onOpenAllyCode={() => setAllyCodeOpen(true)}
+          onOpenPremium={() => setPremiumOpen(true)}
           onToggleTheme={toggleTheme}
           isDark={isDark}
+          isPremium={premiumSnap.isPremium}
         />
-        <AllyCodeModal visible={allyCodeOpen} onClose={() => setAllyCodeOpen(false)} />
         {guideOpen ? <GuideModalHost visible={guideOpen} onClose={() => setGuideOpen(false)} /> : null}
+        <PremiumModalHost visible={premiumOpen} onClose={() => setPremiumOpen(false)} />
       </SafeAreaView>
     </SafeAreaProvider>
   );
@@ -798,103 +703,20 @@ const createMenuStyles = colors => StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
-});
-
-const createAllyCodeStyles = colors => StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  card: {
-    width: '100%',
-    maxWidth: 360,
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 18,
-    gap: 10,
-  },
-  title: {
-    color: colors.text,
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  subtitle: {
-    color: colors.muted,
-    fontSize: 12,
-    lineHeight: 17,
-  },
-  statusBlock: {
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: 8,
-    padding: 10,
-    gap: 2,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  statusLabel: {
-    color: colors.muted,
-    fontSize: 10,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  statusValue: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  statusSub: {
-    color: colors.muted,
-    fontSize: 11,
-  },
-  input: {
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: colors.text,
-    fontSize: 16,
-    letterSpacing: 1,
-    textAlign: 'center',
-  },
-  msg: {
-    color: colors.muted,
-    fontSize: 12,
-    textAlign: 'center',
-  },
-  actions: {
+  premiumButton: {
+    backgroundColor: 'rgba(245,185,66,0.10)',
+    borderColor: '#f5b942',
     flexDirection: 'row',
     gap: 8,
-    marginTop: 4,
   },
-  button: {
-    flex: 1,
-    paddingVertical: 11,
-    borderRadius: 8,
-    alignItems: 'center',
-    borderWidth: 1,
+  premiumButtonIcon: {
+    fontSize: 16,
   },
-  buttonPrimary: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  buttonSecondary: {
-    backgroundColor: colors.surfaceAlt,
-    borderColor: colors.border,
-  },
-  buttonDisabled: {
-    opacity: 0.55,
-  },
-  buttonText: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: '700',
+  premiumButtonText: {
+    color: '#f5b942',
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 0.3,
   },
 });
+

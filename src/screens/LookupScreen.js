@@ -12,7 +12,6 @@ const CHARS = _RAW_CHARS.filter(c => {
   return true;
 });
 import CharacterCard from '../components/CharacterCard';
-import AdBanner from '../components/AdBanner';
 import { useAppTheme } from '../theme/appTheme';
 
 const ALL = 'All';
@@ -341,8 +340,6 @@ export default function LookupScreen({ isActive = true }) {
           </View>
         </TouchableOpacity>
       </Modal>
-
-      <AdBanner />
     </SafeAreaView>
   );
 }

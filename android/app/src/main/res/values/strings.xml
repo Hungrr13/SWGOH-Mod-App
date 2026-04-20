@@ -1,5 +1,5 @@
 <resources>
-  <string name="app_name">Mods SWGOH</string>
+  <string name="app_name">ModForge</string>
   <string name="expo_splash_screen_resize_mode" translatable="false">contain</string>
   <string name="expo_splash_screen_status_bar_translucent" translatable="false">false</string>
   <string name="mod_overlay_notification_channel_name">Overlay Capture</string>

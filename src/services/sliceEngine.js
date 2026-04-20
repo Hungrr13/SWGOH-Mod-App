@@ -622,7 +622,9 @@ function scoreSynergy(scoredStats, dominantTags) {
 function scoreUpside(scoredStats, { shape, primary } = {}) {
   if (!scoredStats.length) return 0;
 
-  const strongOnPlan = scoredStats.filter((s) => s.targetWeight >= 55 && s.qualityPct >= 70).length;
+  // qualityPct >= 60 catches a 3-roll Speed +15 (which scores ~64) — community
+  // rule "3+ speed = slice" depends on this counting as strong-on-plan.
+  const strongOnPlan = scoredStats.filter((s) => s.targetWeight >= 55 && s.qualityPct >= 60).length;
   const goodOnPlan = scoredStats.filter((s) => s.targetWeight >= 40 && s.qualityPct >= 60).length;
   const avgSliceGain = scoredStats.reduce((sum, s) => sum + s.sliceGainPct, 0) / scoredStats.length;
 
@@ -896,7 +898,7 @@ export function evaluateSliceMod({
   const noShellUsers = !modSet && matches.length === 0;
   const noBuildUse = noExactShellUsers || noShellUsers;
 
-  const decision = (forcedsell || noBuildUse) ? "SELL" : getDecisionLabel(finalScore);
+  const decision = (forcedsell || noBuildUse) ? "SELL" : getDecisionLabel(Math.round(finalScore));
   const ceiling = getCeilingLabel(upside);
   const nextHit = getNextHitNarrative(secondary.scoredStats);
   const tierAction = tier

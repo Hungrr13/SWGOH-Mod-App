@@ -47,6 +47,18 @@ const GUIDE_PAGES = [
       'Check the best matching characters section to judge whether the mod has a clear future home.',
     ],
   },
+  {
+    key: 'scanner',
+    eyebrow: 'Tab 4',
+    title: 'Mod Scanner',
+    icon: '📷',
+    body: 'Use this tab to scan a mod straight from the SWGOH mod inspect screen. Start the floating bubble, jump into the game, and tap the bubble while a mod is open to capture and parse its set, shape, primary, and secondaries.',
+    tips: [
+      'Link your ally code at the top so character recommendations only include heroes you actually own.',
+      'Tap Start Scanner Bubble, grant the overlay + screen-capture prompts once, and the bubble follows you into SWGOH.',
+      'After a capture, use the Use In Finder or Use In Slicer buttons to send the parsed mod straight to the right tab.',
+    ],
+  },
 ];
 
 export default function GuideModal({ visible, onClose }) {

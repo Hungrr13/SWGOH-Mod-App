@@ -1,25 +1,20 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { useAppTheme } from '../theme/appTheme';
+import { getAdUnitId } from '../config/adsConfig';
 
 // Keep ads out of development/dev-client startup so native event emitters
 // from the ads package do not crash the app before JS finishes loading.
 const ADS_ENABLED = !__DEV__;
 
-let BannerAd, BannerAdSize, TestIds;
+let nativeMod = null;
+let BannerAd, BannerAdSize;
 if (ADS_ENABLED) {
-  ({ BannerAd, BannerAdSize, TestIds } = require('react-native-google-mobile-ads'));
+  nativeMod = require('react-native-google-mobile-ads');
+  ({ BannerAd, BannerAdSize } = nativeMod);
 }
 
-// Use test ad units during development.
-// Replace with real ad unit IDs before publishing.
-const BANNER_ID = ADS_ENABLED
-  ? Platform.select({
-      ios:     TestIds.BANNER,
-      android: TestIds.BANNER,
-      default: TestIds.BANNER,
-    })
-  : null;
+const BANNER_ID = getAdUnitId('banner', nativeMod);
 
 function PlaceholderBanner() {
   const theme = useAppTheme();

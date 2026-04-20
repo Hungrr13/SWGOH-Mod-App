@@ -11,7 +11,6 @@ const CHARS = _RAW_CHARS_F.filter(c => {
   return true;
 });
 import CharacterCard from '../components/CharacterCard';  // used in full profile view
-import AdBanner from '../components/AdBanner';
 import CustomPicker from '../components/CustomPicker';
 import StatPickerModal from '../components/StatPickerModal';
 import ModShapeIcon, { SHAPE_COLORS } from '../components/ModShapeIcon';
@@ -20,6 +19,11 @@ import {
   decodeModSet, decodePrimary,
   MOD_SETS, SHAPES, SHAPE_PRIMARIES,
 } from '../constants/modData';
+import * as premiumState from '../services/premiumState';
+import { showRewardedAd } from '../services/rewardedAds';
+
+const FINDER_FULL_FEATURE = premiumState.FEATURES.FINDER_FULL;
+const FREE_TIER_KEYS = new Set(['best']);
 
 const NONE = '';
 
@@ -328,6 +332,28 @@ export default function FinderScreen({ isActive = true, overlayPrefill = null, o
     best: true,
     good: false,
   });
+  const [premium, setPremium] = useState(() => premiumState.getSnapshot());
+  const [unlockBusy, setUnlockBusy] = useState(false);
+
+  useEffect(() => {
+    setPremium(premiumState.getSnapshot());
+    return premiumState.subscribe(setPremium);
+  }, []);
+
+  const finderUnlocked = premium.isPremium || premiumState.hasFeature(FINDER_FULL_FEATURE);
+
+  const handleUnlockFullList = useCallback(async () => {
+    if (unlockBusy) return;
+    setUnlockBusy(true);
+    try {
+      const result = await showRewardedAd(FINDER_FULL_FEATURE);
+      if (!result.rewarded && result.reason === 'ads-unavailable') {
+        // No-op: button stays, premium gating remains.
+      }
+    } finally {
+      setUnlockBusy(false);
+    }
+  }, [unlockBusy]);
 
   const secSetters = [setSec1, setSec2, setSec3, setSec4];
   const secValues  = [sec1, sec2, sec3, sec4];
@@ -404,10 +430,17 @@ export default function FinderScreen({ isActive = true, overlayPrefill = null, o
   // ── Results screen ─────────────────────────────────────────────────────────
   if (results !== null) {
     const resultsByName = new Map(results.map(item => [item.char.name, item]));
-    const groupedResults = FINDER_SECTIONS.map(section => ({
+    const allGroupedResults = FINDER_SECTIONS.map(section => ({
       ...section,
       items: results.filter(item => classifyFinderTier(item) === section.key),
     })).filter(section => section.items.length > 0);
+    const groupedResults = finderUnlocked
+      ? allGroupedResults
+      : allGroupedResults.filter(section => FREE_TIER_KEYS.has(section.key));
+    const hiddenSections = finderUnlocked
+      ? []
+      : allGroupedResults.filter(section => !FREE_TIER_KEYS.has(section.key));
+    const hiddenCount = hiddenSections.reduce((acc, s) => acc + s.items.length, 0);
 
     // Full profile view — one card, all others hidden
     if (fullProfileName !== null) {
@@ -426,7 +459,6 @@ export default function FinderScreen({ isActive = true, overlayPrefill = null, o
           <ScrollView contentContainerStyle={{ padding: 12, paddingBottom: 24 }}>
             <CharacterCard char={item.char} score={item.score} />
           </ScrollView>
-          <AdBanner />
         </SafeAreaView>
       );
       }
@@ -490,9 +522,29 @@ export default function FinderScreen({ isActive = true, overlayPrefill = null, o
                 })}
               </View>
             ))}
+            {hiddenCount > 0 ? (
+              <View style={styles.paywallCard}>
+                <Text style={styles.paywallTitle}>
+                  {hiddenCount} more match{hiddenCount === 1 ? '' : 'es'} hidden
+                </Text>
+                <Text style={styles.paywallBody}>
+                  Premium unlocks the full list of every character that can use this mod —
+                  not just the strongest fits. Watch a short ad to unlock for 24 hours.
+                </Text>
+                <TouchableOpacity
+                  style={[styles.paywallButton, unlockBusy && { opacity: 0.55 }]}
+                  onPress={handleUnlockFullList}
+                  disabled={unlockBusy}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.paywallButtonText}>
+                    {unlockBusy ? 'Loading ad…' : 'Watch ad to show all (24h)'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
           </ScrollView>
         )}
-        <AdBanner />
       </SafeAreaView>
     );
   }
@@ -594,7 +646,6 @@ export default function FinderScreen({ isActive = true, overlayPrefill = null, o
           </View>
         </View>
       </ScrollView>
-      <AdBanner />
     </SafeAreaView>
   );
 }
@@ -765,6 +816,37 @@ const createStyles = colors => StyleSheet.create({
   sectionHint: {
     color: colors.soft,
     fontSize: 11,
+  },
+  paywallCard: {
+    marginTop: 4,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: 'rgba(124, 58, 237, 0.55)',
+    borderRadius: 12,
+    padding: 14,
+    gap: 8,
+  },
+  paywallTitle: {
+    color: '#c4b5fd',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  paywallBody: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  paywallButton: {
+    backgroundColor: '#7c3aed',
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  paywallButtonText: {
+    color: '#f8fafc',
+    fontSize: 13,
+    fontWeight: '800',
   },
 
   // FinderResultCard

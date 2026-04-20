@@ -108,7 +108,7 @@ export const SLICE_RULES = {
   thresholds: [
     { min: 90, label: "PREMIUM SLICE" },
     { min: 80, label: "STRONG SLICE" },
-    { min: 70, label: "SLICE IF NEEDED" },
+    { min: 68, label: "SLICE IF NEEDED" },
     { min: 60, label: "HOLD" },
     { min: 30, label: "FILLER ONLY" },
     { min: 0,  label: "SELL" },

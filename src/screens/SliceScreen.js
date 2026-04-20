@@ -4,7 +4,6 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AdBanner from '../components/AdBanner';
 import CustomPicker from '../components/CustomPicker';
 import StatPickerModal from '../components/StatPickerModal';
 import ModShapeIcon, { SHAPE_COLORS } from '../components/ModShapeIcon';
@@ -17,6 +16,8 @@ import {
 } from '../constants/modData';
 import { CHARS as RAW_CHARS } from '../data/chars';
 import { evaluateSliceMod } from '../services/sliceEngine';
+import SlicerWhyPanel from '../components/SlicerWhyPanel';
+import * as premiumState from '../services/premiumState';
 
 // ── Decode chars once, deduplicate by name ───────────────────────────────────
 const _seen = new Set();
@@ -127,6 +128,14 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
   const [tier, setTier]       = useState('5A');
   const [statModal, setStatModal] = useState(null);
   const [charsExpanded, setCharsExpanded] = useState(false);
+  const [premium, setPremium] = useState(() => premiumState.getSnapshot());
+
+  useEffect(() => {
+    setPremium(premiumState.getSnapshot());
+    return premiumState.subscribe(setPremium);
+  }, []);
+
+  const whyUnlocked = premium.isPremium || premiumState.hasFeature(premiumState.FEATURES.SLICER_WHY);
 
   const primOptions = shape ? SHAPE_PRIMARIES[shape] ?? [] : [];
 
@@ -425,6 +434,9 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
               ) : null}
             </View>
 
+            {/* Why · Premium / rewarded-ad gated breakdown */}
+            <SlicerWhyPanel result={result} />
+
             {/* Next hit */}
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Next Roll Potential</Text>
@@ -438,8 +450,8 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
               </View>
             </View>
 
-            {/* Reason lines */}
-            {result.reasonLines.length > 0 && (
+            {/* Reason lines — premium-gated (free users see headline in verdict card) */}
+            {whyUnlocked && result.reasonLines.length > 0 && (
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>Analysis</Text>
                 {result.reasonLines.map((line, i) => (
@@ -500,8 +512,8 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
           </>
         )}
 
-        {/* ── Per-stat quality breakdown ── */}
-        {secRows.length > 0 && (
+        {/* ── Per-stat quality breakdown — premium-gated ── */}
+        {whyUnlocked && secRows.length > 0 && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Stat Quality</Text>
             {secRows.map((row, i) => (
@@ -532,8 +544,6 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
 
         <View style={{ height: 24 }} />
       </ScrollView>
-
-      <AdBanner />
     </SafeAreaView>
   );
 }

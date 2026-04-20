@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   AppState,
   Image,
   Platform,
@@ -13,6 +14,7 @@ import {
 import { useAppTheme } from '../theme/appTheme';
 import { analyzeCapturedMod } from '../services/modCaptureParser';
 import { getModTemplateLibraryStatus } from '../services/modTemplateLibrary';
+import AllyCodePanel from '../components/AllyCodePanel';
 import {
   getOverlayCaptureStatus,
   launchSwgoh,
@@ -28,21 +30,6 @@ import {
   subscribeToOverlayCapture,
   warmScanner,
 } from '../services/overlayCapture';
-
-const STEPS = [
-  {
-    title: '1. Allow Overlay',
-    body: 'Give Android permission to draw over other apps so a floating capture button can appear on top of SWGOH.',
-  },
-  {
-    title: '2. Allow Screen Capture',
-    body: 'Approve Android screen capture so the app can grab the mod card you are looking at and send it back for analysis.',
-  },
-  {
-    title: '3. Analyze The Mod',
-    body: 'Tap the floating button while viewing a mod. We will read the screenshot, identify the set, shape, primary, and secondaries, then open Finder or Slicer with that mod filled in.',
-  },
-];
 
 const BURST_SET_OPTIONS = ['Crit Chance', 'Crit Dmg', 'Offense'];
 const ARROW_TRAINING_SETS = [
@@ -75,6 +62,7 @@ export default function OverlayCaptureScreen({ onBack, onUseInFinder, onUseInSli
   const [arrowTrainBusy, setArrowTrainBusy] = useState('');
   const [arrowTrainMessage, setArrowTrainMessage] = useState('');
   const [templateStatus, setTemplateStatus] = useState(null);
+  const [showDebug, setShowDebug] = useState(false);
   const autoSetupStarted = useRef(false);
   const swgohLaunchRetryRef = useRef(null);
   const appStateRef = useRef(AppState.currentState);
@@ -139,27 +127,18 @@ export default function OverlayCaptureScreen({ onBack, onUseInFinder, onUseInSli
     return () => subscription.remove();
   }, []);
 
+  // Note: we do NOT auto-request the overlay or screen-capture permission on
+  // mount — Google Play rejects apps that jump straight to the system dialog
+  // for sensitive permissions. Permissions are only requested when the user
+  // taps Start Scanner Bubble, and only after we show our own rationale.
   useEffect(() => {
     if (!isAndroid || autoSetupStarted.current) return;
     autoSetupStarted.current = true;
 
-    const runAutoSetup = async () => {
-      let nextStatus = await getOverlayCaptureStatus();
+    (async () => {
+      const nextStatus = await getOverlayCaptureStatus();
       setStatus(nextStatus);
-
-      if (!nextStatus.overlayPermissionGranted) {
-        nextStatus = await requestOverlayPermission();
-        setStatus(nextStatus);
-        return;
-      }
-
-      if (!nextStatus.notificationPermissionGranted) {
-        nextStatus = await requestNotificationPermission();
-        setStatus(nextStatus);
-      }
-    };
-
-    runAutoSetup();
+    })();
   }, [isAndroid]);
 
   useEffect(() => {
@@ -233,6 +212,19 @@ export default function OverlayCaptureScreen({ onBack, onUseInFinder, onUseInSli
     setBusyAction('');
   };
 
+  const confirmRationale = (title, message) =>
+    new Promise(resolve => {
+      Alert.alert(
+        title,
+        message,
+        [
+          { text: 'Not Now', style: 'cancel', onPress: () => resolve(false) },
+          { text: 'Continue', onPress: () => resolve(true) },
+        ],
+        { cancelable: true, onDismiss: () => resolve(false) }
+      );
+    });
+
   const runStartFlow = async () => {
     if (startInFlightRef.current) return;
     startInFlightRef.current = true;
@@ -244,6 +236,17 @@ export default function OverlayCaptureScreen({ onBack, onUseInFinder, onUseInSli
       setStatus(nextStatus);
 
       if (!nextStatus.overlayPermissionGranted) {
+        const proceed = await confirmRationale(
+          'Display Over Other Apps',
+          'ModForge needs to draw a small scan bubble on top of Star Wars: ' +
+            'Galaxy of Heroes so you can tap it while a mod is open. ' +
+            'It does not read other apps\u2019 content or simulate input. ' +
+            'Continue to grant the permission in Android Settings?'
+        );
+        if (!proceed) {
+          pendingStartRef.current = false;
+          return;
+        }
         nextStatus = await requestOverlayPermission();
         setStatus(nextStatus);
         if (!nextStatus.overlayPermissionGranted) {
@@ -254,6 +257,17 @@ export default function OverlayCaptureScreen({ onBack, onUseInFinder, onUseInSli
       }
 
       if (!nextStatus.screenCaptureReady) {
+        const proceed = await confirmRationale(
+          'Capture Screen To Read Mod',
+          'When you tap the bubble, ModForge takes one screenshot of the ' +
+            'mod inspect screen, reads the set / shape / stats locally on ' +
+            'your device, then discards the image. Nothing is uploaded. ' +
+            'Continue to grant screen capture?'
+        );
+        if (!proceed) {
+          pendingStartRef.current = false;
+          return;
+        }
         nextStatus = await requestScreenCapture();
         setStatus(nextStatus);
         // First-time grant: the projection service may take a moment to flip
@@ -401,62 +415,9 @@ export default function OverlayCaptureScreen({ onBack, onUseInFinder, onUseInSli
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator
       >
-        <View style={styles.heroCard}>
-          <Text style={styles.heroTitle}>Fast Android scan flow</Text>
-          <Text style={styles.heroBody}>
-            Turn on the floating scanner, view a mod in SWGOH, tap the bubble, and get a quick recommendation
-            without leaving the game. You can still send the same capture into Finder or Slicer here when needed.
-          </Text>
-          <View style={styles.badgeRow}>
-            <View style={[styles.badge, isAndroid ? styles.readyBadge : styles.pendingBadge]}>
-              <Text style={styles.badgeText}>{isAndroid ? 'Android target' : 'Android only'}</Text>
-            </View>
-            <View style={[styles.badge, styles.pendingBadge]}>
-              <Text style={styles.badgeText}>Native feature in progress</Text>
-            </View>
-          </View>
-          {lastCaptureMessage ? (
-            <View style={styles.captureNotice}>
-              <Text style={styles.captureNoticeText}>{lastCaptureMessage}</Text>
-              {lastCapturePath ? (
-                <Text style={styles.capturePathText}>{lastCapturePath}</Text>
-              ) : null}
-            </View>
-          ) : null}
-        </View>
+        <AllyCodePanel />
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>What to expect</Text>
-          <View style={styles.analysisCard}>
-            <Text style={styles.noteBody}>
-              The scanner is designed for a quick loop: capture, read the overlay recommendation, tap it away,
-              and move straight to the next mod.
-            </Text>
-            <Text style={styles.noteBody}>
-              If the capture needs a closer look, use the same result in Finder or Slicer from this tab.
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Setup Flow</Text>
-          {STEPS.map(step => (
-            <View key={step.title} style={styles.stepCard}>
-              <Text style={styles.stepTitle}>{step.title}</Text>
-              <Text style={styles.stepBody}>{step.body}</Text>
-            </View>
-          ))}
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Permissions</Text>
-          <View style={styles.noteCard}>
-            <Text style={styles.noteTitle}>What we need</Text>
-            <Text style={styles.noteBody}>
-              Android overlay and MediaProjection permissions are both required for the floating
-              capture button workflow. iPhone does not support the same persistent overlay behavior.
-            </Text>
-          </View>
           <View style={styles.statusCard}>
             {statusRows.map(row => (
               <View key={row.label} style={styles.statusRow}>
@@ -473,7 +434,7 @@ export default function OverlayCaptureScreen({ onBack, onUseInFinder, onUseInSli
               <Text style={styles.actionDetail}>
                 {status.floatingButtonRunning
                   ? 'Turn off the Android overlay bubble.'
-                  : 'Starts the floating button and jumps back into SWGOH.'}
+                  : 'Start the bubble and jump into SWGOH.'}
               </Text>
             </View>
             {busyAction === 'floating' ? (
@@ -485,262 +446,246 @@ export default function OverlayCaptureScreen({ onBack, onUseInFinder, onUseInSli
           <Pressable style={styles.settingsButton} onPress={openAppSettings}>
             <Text style={styles.settingsButtonText}>Open App Settings</Text>
           </Pressable>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>What gets analyzed</Text>
-          <View style={styles.analysisCard}>
-            <Text style={styles.analysisLine}>Mod set and shape</Text>
-            <Text style={styles.analysisLine}>Primary stat</Text>
-            <Text style={styles.analysisLine}>All visible secondary stats and values</Text>
-            <Text style={styles.analysisLine}>Recommended use in Finder or slice value in Slicer</Text>
-          </View>
-        </View>
-
-        {templateStatus ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Template Library</Text>
-            <View style={styles.analysisCard}>
-              <Text style={styles.analysisLine}>
-                Source: {templateStatus.source === 'bundled' ? 'Bundled PNG library' : templateStatus.source}
-              </Text>
-              <Text style={styles.analysisLine}>
-                Assets ready: {templateStatus.counts.total} templates
-              </Text>
-              <Text style={styles.noteBody}>
-                This library is now structured so we can swap these bundled PNGs for database-hosted template URLs later without rewriting the scanner pipeline.
-              </Text>
+          {lastCaptureMessage ? (
+            <View style={styles.captureNotice}>
+              <Text style={styles.captureNoticeText}>{lastCaptureMessage}</Text>
             </View>
+          ) : null}
+        </View>
+
+        <View style={styles.heroCard}>
+          <Text style={styles.heroTitle}>How the scanner works</Text>
+          <Text style={styles.heroBody}>
+            Open a mod in SWGOH's inspect view, then tap the floating bubble.
+            The app captures that frame, reads the set icon, outer shape,
+            primary, and secondaries, and hands the parsed mod off to Finder or
+            Slicer so you can act on it without retyping anything.
+          </Text>
+          <Text style={styles.heroDisclaimer}>
+            Companion app for Star Wars: Galaxy of Heroes. Not affiliated with
+            or endorsed by Electronic Arts, Capital Games, or Lucasfilm. The
+            overlay only displays a button you tap; no automation or simulated
+            input. Screenshots are processed locally and not uploaded.
+          </Text>
+        </View>
+
+        {analysisResult?.parsed ? (
+          <View style={styles.handoffRow}>
+            <Pressable style={styles.handoffButton} onPress={() => onUseInFinder?.(analysisResult.parsed)}>
+              <Text style={styles.handoffButtonText}>Use In Finder</Text>
+            </Pressable>
+            <Pressable style={styles.handoffButton} onPress={() => onUseInSlicer?.(analysisResult.parsed)}>
+              <Text style={styles.handoffButtonText}>Use In Slicer</Text>
+            </Pressable>
           </View>
         ) : null}
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Example Captures</Text>
-          <Text style={styles.noteBody}>
-            We can drop a few real scanner examples here later so this tab shows what a good capture looks like.
+        <Pressable style={styles.debugToggle} onPress={() => setShowDebug(prev => !prev)}>
+          <Text style={styles.debugToggleText}>
+            {showDebug ? 'Hide debug tools' : 'Show debug tools'}
           </Text>
-          <View style={styles.exampleRow}>
-            <View style={styles.exampleCard}>
-              <Text style={styles.exampleTitle}>Coming Soon</Text>
-              <Text style={styles.exampleBody}>Clean full mod card screenshot</Text>
-            </View>
-            <View style={styles.exampleCard}>
-              <Text style={styles.exampleTitle}>Coming Soon</Text>
-              <Text style={styles.exampleBody}>Overlay recommendation result</Text>
-            </View>
-          </View>
-        </View>
+        </Pressable>
 
-        {lastCaptureInput ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Latest Capture</Text>
-            <View style={styles.previewCard}>
-              {lastCapturePath ? (
-                <>
-                  <Image
-                    source={{ uri: `file://${lastCapturePath}` }}
-                    style={styles.previewImage}
-                    resizeMode="cover"
-                  />
-                  <Text style={styles.previewPath}>{lastCapturePath}</Text>
-                </>
-              ) : null}
-              <Pressable style={styles.analyzeButton} onPress={analyzeLatestCapture}>
-                {analysisBusy ? (
-                  <ActivityIndicator size="small" color={theme.background} />
-                ) : (
-                  <Text style={styles.analyzeButtonText}>{analysisResult ? 'Re-Analyze Capture' : 'Analyze Latest Capture'}</Text>
-                )}
-              </Pressable>
-              <View style={styles.analysisResultCard}>
-                <Text style={styles.analysisResultTitle}>Scanner Result</Text>
-                <Text style={styles.analysisResultSummary}>
-                  Native overlay classifier output from the capture event.
-                </Text>
-                <Text style={styles.analysisField}>Set: {lastCaptureInput.detectedSet || 'Unknown'}</Text>
-                <Text style={styles.analysisField}>Shape: {lastCaptureInput.detectedShape || 'Unknown'}</Text>
-                <Text style={styles.analysisField}>Top Set Matches:</Text>
-                {(lastCaptureInput.topSetMatches?.length ? lastCaptureInput.topSetMatches : ['No set scores yet.']).map((line, index) => (
-                  <Text key={`scanner-set-${index}-${line}`} style={styles.analysisSecondaryLine}>{line}</Text>
-                ))}
-              </View>
-              <View style={styles.learningCard}>
-                <Text style={styles.learningTitle}>Teach Outer Shape</Text>
-                <Text style={styles.learningBody}>
-                  Confirm the true outer mod shape for this scan. The app will use these explicit labels to train shape prototypes.
-                </Text>
-                <View style={styles.learningButtonRow}>
-                  {SHAPE_OPTIONS.map(shapeName => (
-                    <Pressable
-                      key={shapeName}
-                      style={[
-                        styles.learningButton,
-                        lastCaptureInput?.detectedShape === shapeName ? styles.learningButtonSuggested : null,
-                      ]}
-                      onPress={() => confirmShapeLearning(shapeName)}
-                      disabled={Boolean(shapeLearningBusy)}
-                    >
-                      {shapeLearningBusy === shapeName ? (
-                        <ActivityIndicator size="small" color={theme.primary} />
-                      ) : (
-                        <Text style={styles.learningButtonText}>{shapeName}</Text>
-                      )}
-                    </Pressable>
-                  ))}
-                </View>
-                {shapeLearningMessage ? (
-                  <Text style={styles.learningMessage}>{shapeLearningMessage}</Text>
-                ) : null}
-              </View>
-              {analysisResult?.parsed ? (
-                <View style={styles.handoffRow}>
-                  <Pressable style={styles.handoffButton} onPress={() => onUseInFinder?.(analysisResult.parsed)}>
-                    <Text style={styles.handoffButtonText}>Use In Finder</Text>
-                  </Pressable>
-                  <Pressable style={styles.handoffButton} onPress={() => onUseInSlicer?.(analysisResult.parsed)}>
-                    <Text style={styles.handoffButtonText}>Use In Slicer</Text>
-                  </Pressable>
-                </View>
-              ) : null}
-              {analysisResult ? (
-                <View style={styles.analysisResultCard}>
-                  <Text style={styles.analysisResultTitle}>Parser Status</Text>
-                  <Text style={styles.analysisResultSummary}>{analysisResult.summary}</Text>
-                  <Text style={styles.noteBody}>
-                    This parser is OCR-based and can disagree with the native scanner result above.
+        {showDebug ? (
+          <>
+            {templateStatus ? (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Template Library</Text>
+                <View style={styles.analysisCard}>
+                  <Text style={styles.analysisLine}>
+                    Source: {templateStatus.source === 'bundled' ? 'Bundled PNG library' : templateStatus.source}
                   </Text>
-                  {analysisResult.fields ? (
+                  <Text style={styles.analysisLine}>
+                    Assets ready: {templateStatus.counts.total} templates
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+
+            {lastCaptureInput ? (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Latest Capture</Text>
+                <View style={styles.previewCard}>
+                  {lastCapturePath ? (
                     <>
-                      <Text style={styles.analysisField}>Set: {analysisResult.fields.modSet}</Text>
-                      <Text style={styles.analysisField}>Shape: {analysisResult.fields.modShape}</Text>
-                      <Text style={styles.analysisField}>Primary: {analysisResult.fields.primary}</Text>
-                      <Text style={styles.analysisField}>Secondaries:</Text>
-                      {analysisResult.fields.secondaries.map(line => (
-                        <Text key={line} style={styles.analysisSecondaryLine}>{line}</Text>
-                      ))}
+                      <Image
+                        source={{ uri: `file://${lastCapturePath}` }}
+                        style={styles.previewImage}
+                        resizeMode="cover"
+                      />
+                      <Text style={styles.previewPath}>{lastCapturePath}</Text>
                     </>
                   ) : null}
-                  {analysisResult.rawText ? (
-                    <View style={styles.rawTextCard}>
-                      <Text style={styles.rawTextTitle}>Recognized Text</Text>
-                      <Text style={styles.rawTextValue}>{analysisResult.rawText}</Text>
+                  <Pressable style={styles.analyzeButton} onPress={analyzeLatestCapture}>
+                    {analysisBusy ? (
+                      <ActivityIndicator size="small" color={theme.background} />
+                    ) : (
+                      <Text style={styles.analyzeButtonText}>{analysisResult ? 'Re-Analyze Capture' : 'Analyze Latest Capture'}</Text>
+                    )}
+                  </Pressable>
+                  <View style={styles.analysisResultCard}>
+                    <Text style={styles.analysisResultTitle}>Scanner Result</Text>
+                    <Text style={styles.analysisField}>Set: {lastCaptureInput.detectedSet || 'Unknown'}</Text>
+                    <Text style={styles.analysisField}>Shape: {lastCaptureInput.detectedShape || 'Unknown'}</Text>
+                    <Text style={styles.analysisField}>Top Set Matches:</Text>
+                    {(lastCaptureInput.topSetMatches?.length ? lastCaptureInput.topSetMatches : ['No set scores yet.']).map((line, index) => (
+                      <Text key={`scanner-set-${index}-${line}`} style={styles.analysisSecondaryLine}>{line}</Text>
+                    ))}
+                  </View>
+                  <View style={styles.learningCard}>
+                    <Text style={styles.learningTitle}>Teach Outer Shape</Text>
+                    <View style={styles.learningButtonRow}>
+                      {SHAPE_OPTIONS.map(shapeName => (
+                        <Pressable
+                          key={shapeName}
+                          style={[
+                            styles.learningButton,
+                            lastCaptureInput?.detectedShape === shapeName ? styles.learningButtonSuggested : null,
+                          ]}
+                          onPress={() => confirmShapeLearning(shapeName)}
+                          disabled={Boolean(shapeLearningBusy)}
+                        >
+                          {shapeLearningBusy === shapeName ? (
+                            <ActivityIndicator size="small" color={theme.primary} />
+                          ) : (
+                            <Text style={styles.learningButtonText}>{shapeName}</Text>
+                          )}
+                        </Pressable>
+                      ))}
+                    </View>
+                    {shapeLearningMessage ? (
+                      <Text style={styles.learningMessage}>{shapeLearningMessage}</Text>
+                    ) : null}
+                  </View>
+                  {analysisResult ? (
+                    <View style={styles.analysisResultCard}>
+                      <Text style={styles.analysisResultTitle}>Parser Status</Text>
+                      <Text style={styles.analysisResultSummary}>{analysisResult.summary}</Text>
+                      {analysisResult.fields ? (
+                        <>
+                          <Text style={styles.analysisField}>Set: {analysisResult.fields.modSet}</Text>
+                          <Text style={styles.analysisField}>Shape: {analysisResult.fields.modShape}</Text>
+                          <Text style={styles.analysisField}>Primary: {analysisResult.fields.primary}</Text>
+                          <Text style={styles.analysisField}>Secondaries:</Text>
+                          {analysisResult.fields.secondaries.map(line => (
+                            <Text key={line} style={styles.analysisSecondaryLine}>{line}</Text>
+                          ))}
+                        </>
+                      ) : null}
+                      {analysisResult.rawText ? (
+                        <View style={styles.rawTextCard}>
+                          <Text style={styles.rawTextTitle}>Recognized Text</Text>
+                          <Text style={styles.rawTextValue}>{analysisResult.rawText}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  ) : null}
+                  {burstLearningVisible ? (
+                    <View style={styles.learningCard}>
+                      <Text style={styles.learningTitle}>Teach Burst Scanner</Text>
+                      <View style={styles.learningButtonRow}>
+                        {BURST_SET_OPTIONS.map(setName => (
+                          <Pressable
+                            key={setName}
+                            style={[
+                              styles.learningButton,
+                              lastCaptureInput?.detectedSet === setName ? styles.learningButtonSuggested : null,
+                            ]}
+                            onPress={() => confirmBurstLearning(setName)}
+                            disabled={Boolean(learningBusySet)}
+                          >
+                            {learningBusySet === setName ? (
+                              <ActivityIndicator size="small" color={theme.primary} />
+                            ) : (
+                              <Text style={styles.learningButtonText}>{setName}</Text>
+                            )}
+                          </Pressable>
+                        ))}
+                      </View>
+                      {learningMessage ? (
+                        <Text style={styles.learningMessage}>{learningMessage}</Text>
+                      ) : null}
+                    </View>
+                  ) : null}
+                  {lastCaptureInput?.debugCrops ? (
+                    <View style={styles.learningCard}>
+                      <Text style={styles.learningTitle}>Arrow Training</Text>
+                      <View style={styles.learningButtonRow}>
+                        {ARROW_TRAINING_SETS.map(setName => (
+                          <Pressable
+                            key={setName}
+                            style={styles.learningButton}
+                            onPress={() => saveArrowTraining(setName)}
+                            disabled={Boolean(arrowTrainBusy)}
+                          >
+                            {arrowTrainBusy === setName ? (
+                              <ActivityIndicator size="small" color={theme.primary} />
+                            ) : (
+                              <Text style={styles.learningButtonText}>{setName}</Text>
+                            )}
+                          </Pressable>
+                        ))}
+                      </View>
+                      {arrowTrainMessage ? (
+                        <Text style={styles.learningMessage}>{arrowTrainMessage}</Text>
+                      ) : null}
                     </View>
                   ) : null}
                 </View>
-              ) : null}
-              {burstLearningVisible ? (
-                <View style={styles.learningCard}>
-                  <Text style={styles.learningTitle}>Teach Burst Scanner</Text>
-                  <Text style={styles.learningBody}>
-                    Confirm the true burst set for this scan. The app will only learn from these explicit labels.
-                  </Text>
-                  <View style={styles.learningButtonRow}>
-                    {BURST_SET_OPTIONS.map(setName => (
-                      <Pressable
-                        key={setName}
-                        style={[
-                          styles.learningButton,
-                          lastCaptureInput?.detectedSet === setName ? styles.learningButtonSuggested : null,
-                        ]}
-                        onPress={() => confirmBurstLearning(setName)}
-                        disabled={Boolean(learningBusySet)}
-                      >
-                        {learningBusySet === setName ? (
-                          <ActivityIndicator size="small" color={theme.primary} />
-                        ) : (
-                          <Text style={styles.learningButtonText}>{setName}</Text>
-                        )}
-                      </Pressable>
-                    ))}
-                  </View>
-                  {learningMessage ? (
-                    <Text style={styles.learningMessage}>{learningMessage}</Text>
-                  ) : null}
-                </View>
-              ) : null}
-              {lastCaptureInput?.debugCrops ? (
-                <View style={styles.learningCard}>
-                  <Text style={styles.learningTitle}>Arrow Training (Debug)</Text>
-                  <Text style={styles.learningBody}>
-                    Label the last scan's arrow set. Saves the cropped icon to device-side training folder.
-                  </Text>
-                  <View style={styles.learningButtonRow}>
-                    {ARROW_TRAINING_SETS.map(setName => (
-                      <Pressable
-                        key={setName}
-                        style={styles.learningButton}
-                        onPress={() => saveArrowTraining(setName)}
-                        disabled={Boolean(arrowTrainBusy)}
-                      >
-                        {arrowTrainBusy === setName ? (
-                          <ActivityIndicator size="small" color={theme.primary} />
-                        ) : (
-                          <Text style={styles.learningButtonText}>{setName}</Text>
-                        )}
-                      </Pressable>
-                    ))}
-                  </View>
-                  {arrowTrainMessage ? (
-                    <Text style={styles.learningMessage}>{arrowTrainMessage}</Text>
-                  ) : null}
-                </View>
-              ) : null}
-            </View>
-          </View>
-        ) : null}
+              </View>
+            ) : null}
 
-        {lastCaptureInput?.debugCrops ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Scanner Debug</Text>
-            <View style={styles.previewCard}>
-              <Text style={styles.debugCaption}>
-                These are the exact native crops used for calibration, so we can see whether the set/shape/stat areas are being cropped correctly.
-              </Text>
-              <View style={styles.debugGrid}>
-                {[
-                  { label: 'Focused Crop', path: lastCaptureInput.debugCrops.focused },
-                  { label: 'Stats Crop', path: lastCaptureInput.debugCrops.stats },
-                  { label: 'Shape Crop', path: lastCaptureInput.debugCrops.shape },
-                  { label: 'Icon Crop', path: lastCaptureInput.debugCrops.icon },
-                  { label: 'Set Crop', path: lastCaptureInput.debugCrops.set },
-                ].map(item => (
-                  <View key={item.label} style={styles.debugCard}>
-                    <Text style={styles.debugTitle}>{item.label}</Text>
-                    {item.path ? (
-                      <>
-                        <Image
-                          source={{ uri: `file://${item.path}` }}
-                          style={styles.debugImage}
-                          resizeMode="contain"
-                        />
-                        <Text style={styles.debugPath}>{item.path}</Text>
-                      </>
-                    ) : (
-                      <Text style={styles.debugMissing}>No crop saved yet.</Text>
-                    )}
+            {lastCaptureInput?.debugCrops ? (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Scanner Debug</Text>
+                <View style={styles.previewCard}>
+                  <View style={styles.debugGrid}>
+                    {[
+                      { label: 'Focused Crop', path: lastCaptureInput.debugCrops.focused },
+                      { label: 'Stats Crop', path: lastCaptureInput.debugCrops.stats },
+                      { label: 'Shape Crop', path: lastCaptureInput.debugCrops.shape },
+                      { label: 'Icon Crop', path: lastCaptureInput.debugCrops.icon },
+                      { label: 'Set Crop', path: lastCaptureInput.debugCrops.set },
+                    ].map(item => (
+                      <View key={item.label} style={styles.debugCard}>
+                        <Text style={styles.debugTitle}>{item.label}</Text>
+                        {item.path ? (
+                          <>
+                            <Image
+                              source={{ uri: `file://${item.path}` }}
+                              style={styles.debugImage}
+                              resizeMode="contain"
+                            />
+                            <Text style={styles.debugPath}>{item.path}</Text>
+                          </>
+                        ) : (
+                          <Text style={styles.debugMissing}>No crop saved yet.</Text>
+                        )}
+                      </View>
+                    ))}
                   </View>
-                ))}
+                  <View style={styles.rawTextCard}>
+                    <Text style={styles.rawTextTitle}>OCR Lines</Text>
+                    {(lastCaptureInput.ocrLines?.length ? lastCaptureInput.ocrLines : [lastCaptureInput.ocrText || 'No OCR text yet.']).map((line, index) => (
+                      <Text key={`${index}-${line}`} style={styles.rawTextValue}>{line}</Text>
+                    ))}
+                  </View>
+                  <View style={styles.rawTextCard}>
+                    <Text style={styles.rawTextTitle}>Top Shape Matches</Text>
+                    {(lastCaptureInput.topShapeMatches?.length ? lastCaptureInput.topShapeMatches : ['No shape scores yet.']).map((line, index) => (
+                      <Text key={`shape-${index}-${line}`} style={styles.rawTextValue}>{line}</Text>
+                    ))}
+                  </View>
+                  <View style={styles.rawTextCard}>
+                    <Text style={styles.rawTextTitle}>Top Set Matches</Text>
+                    {(lastCaptureInput.topSetMatches?.length ? lastCaptureInput.topSetMatches : ['No set scores yet.']).map((line, index) => (
+                      <Text key={`set-${index}-${line}`} style={styles.rawTextValue}>{line}</Text>
+                    ))}
+                  </View>
+                </View>
               </View>
-              <View style={styles.rawTextCard}>
-                <Text style={styles.rawTextTitle}>OCR Lines</Text>
-                {(lastCaptureInput.ocrLines?.length ? lastCaptureInput.ocrLines : [lastCaptureInput.ocrText || 'No OCR text yet.']).map((line, index) => (
-                  <Text key={`${index}-${line}`} style={styles.rawTextValue}>{line}</Text>
-                ))}
-              </View>
-              <View style={styles.rawTextCard}>
-                <Text style={styles.rawTextTitle}>Top Shape Matches</Text>
-                {(lastCaptureInput.topShapeMatches?.length ? lastCaptureInput.topShapeMatches : ['No shape scores yet.']).map((line, index) => (
-                  <Text key={`shape-${index}-${line}`} style={styles.rawTextValue}>{line}</Text>
-                ))}
-              </View>
-              <View style={styles.rawTextCard}>
-                <Text style={styles.rawTextTitle}>Top Set Matches</Text>
-                {(lastCaptureInput.topSetMatches?.length ? lastCaptureInput.topSetMatches : ['No set scores yet.']).map((line, index) => (
-                  <Text key={`set-${index}-${line}`} style={styles.rawTextValue}>{line}</Text>
-                ))}
-              </View>
-            </View>
-          </View>
+            ) : null}
+          </>
         ) : null}
       </ScrollView>
     </View>
@@ -819,6 +764,13 @@ const createStyles = colors => StyleSheet.create({
     color: colors.muted,
     fontSize: 14,
     lineHeight: 21,
+  },
+  heroDisclaimer: {
+    color: colors.muted,
+    fontSize: 11,
+    lineHeight: 16,
+    fontStyle: 'italic',
+    opacity: 0.8,
   },
   badgeRow: {
     flexDirection: 'row',
@@ -1195,5 +1147,21 @@ const createStyles = colors => StyleSheet.create({
     color: colors.muted,
     fontSize: 12,
     lineHeight: 17,
+  },
+  debugToggle: {
+    alignSelf: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+  },
+  debugToggleText: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
 });
