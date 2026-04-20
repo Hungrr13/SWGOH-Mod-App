@@ -179,10 +179,14 @@ This is the current repo map after the cleanup pass. If you are not sure where t
 ### Shape classifier rescues
 - `refineShapeSelection(...)` in `ModIconClassifier.kt` now looks at other candidates' rule debug (mask-only, inner, outer, unguided) to recover missed shapes.
 - Rescues added:
-  - Cross → Square when the mask-only candidate shows a near-full square fill (hollow-frame false positive).
+  - Cross → Square when the mask-only candidate shows a near-full square fill (hollow-frame false positive), **gated on `!anyCandidateStronglyCross`** so Speed-set Crosses (halo-fills-bbox makes mask-only look square) don't get flipped when inner/outer candidates still score Cross ≥ 0.65.
   - Circle → Arrow when any candidate flags `arrowLooksCompact` with Arrow ≥ 0.50.
-  - Circle → Diamond when any candidate flags `circleLooksDiamondish` with Diamond ≥ 0.35.
-  - Cross → Diamond when `anyCandidateLooksDiamond` and `diamondCornerScore ≥ 0.80` (rounded diamond misread as plus).
+  - Circle → Diamond when any candidate flags `circleLooksDiamondish` with Diamond ≥ 0.35, **gated on `!winnerStronglyRound`** so the Grievous-Circle case (mask-only Circle:0.97, stronglyRound=true) isn't flipped by `shapeDiamondCornerScore` artifacts from the character portrait.
+  - Cross/Square → Diamond when `diamondCornerScore ≥ 0.80`, aspect ~1, **and `extent ≤ 0.73`**. Extent guard calibrated against real-Diamond samples (extent 0.65–0.70, corners empty) vs. Cross-with-set-icon (extent ~0.78, icon+halo fill the bbox). dDiag was abandoned as a guard after a real Diamond scanned with dDiag=0.358.
+  - HIGH-PRIORITY Circle rescue: when `maskOnlyLooksStronglyCircle` (mask-only Circle score ≥ 0.75, stronglyRound, circularity ≥ 0.85) and no candidate flags diamondish — trust it over any prior Square/Diamond pick. A classic rounded Diamond scores mask-only Circle ≈ 0.26 with circularity ≈ 0.66, safely below.
+  - HIGH-PRIORITY Triangle rescue: a gold Triangle with a central set icon can produce a vertical+horizontal bar that makes the outer candidate pick Cross; when `triangleScore ≥ 0.55`, `asymmetry ≥ 0.90`, and aspect ~1, flip to Triangle. Real Diamonds (asymmetry ≤ 0.79) and Speed Crosses (asymmetry ≤ 0.69) don't trigger.
+- Binary-mask portrait erase: before morphology, `binaryMat` has two 0.30W × 0.34H ellipses punched at the top-left and bottom-left quadrant centers. This removes character-portrait bleed from the mask-only candidate's silhouette, which was causing the Grievous Circle to read as Diamond.
+- Mask-only override: when the `mask-only` candidate scores ≥ 0.85 AND beats the best guided candidate by ≥ 0.20, it wins regardless of the usual guided preference. Landed alongside the portrait erase to rescue the Grievous Circle.
 - Triangle rescue relaxed to use `contourMetrics.cornerCount ≤ 4` instead of the less reliable geometry vertex count.
 
 ### Overlay UX

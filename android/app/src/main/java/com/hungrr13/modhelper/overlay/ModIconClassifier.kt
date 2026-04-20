@@ -425,6 +425,28 @@ class ModIconClassifier(private val context: Context) {
         val debug = candidate.ruleDebug ?: return@any false
         debug.circleLooksDiamondish && (debug.scores["Diamond"] ?: 0.0) >= 0.35
       }
+    // A circle with a central set icon fools outer/inner contour candidates
+    // into tracing a rounded-square silhouette, but the mask-only candidate
+    // (full-image threshold) still sees the true round outline. When mask-only
+    // strongly picks Circle AND the shape is clearly round, trust it.
+    // Calibrated against real-diamond samples (Diamond #2 mask-only scored
+    // Circle=0.26, stronglyRound=false, circularity=0.658 — safely below).
+    val maskOnlyDebug = detection.syntheticCandidateDebugs
+      .firstOrNull { it.label == "mask-only" }?.ruleDebug
+    val maskOnlyLooksStronglyCircle =
+      maskOnlyDebug != null &&
+        (maskOnlyDebug.scores["Circle"] ?: 0.0) >= 0.75 &&
+        maskOnlyDebug.stronglyRound &&
+        maskOnlyDebug.geometry.circularity >= 0.85
+    // A Cross rescue to Square is only valid when no contour view actually
+    // saw a clear Cross. Speed-set Crosses light up mask-only as square
+    // (icon + halo fill the bbox) while inner/outer candidates still score
+    // Cross strongly — we must not flip those to Square.
+    val anyCandidateStronglyCross =
+      detection.syntheticCandidateDebugs.any { candidate ->
+        val debug = candidate.ruleDebug ?: return@any false
+        (debug.scores["Cross"] ?: 0.0) >= 0.65
+      }
 
     try {
       Log.i("ModShapeDebug", "refineShapeSelection entry: name=${detection.name} smoothedCorners=${metrics.smoothedCornerCount} cornerCount=${metrics.cornerCount} dCorner=${geometry.diamondCornerScore} dDiag=${geometry.diamondDiagonalScore} triScore=${geometry.triangleScore}")
@@ -432,6 +454,29 @@ class ModIconClassifier(private val context: Context) {
 
     val forcedName =
       when {
+        // HIGH-PRIORITY CIRCLE RESCUE: a true Circle with a central set icon
+        // can confuse outer/inner contour analysis into picking Square or
+        // Diamond, but the mask-only candidate still sees the clean round
+        // outline. Trust it when it's strongly round (empirically safe — a
+        // classic rounded Diamond scores mask-only Circle ~0.26 with
+        // circularity ~0.66, well below these thresholds). Guard: a
+        // very-rounded Diamond (lens/petal silhouette) ALSO makes mask-only
+        // look strongly circular — honour the Diamond signal over Circle.
+        detection.name != "Circle" &&
+          maskOnlyLooksStronglyCircle &&
+          !anyCandidateLooksDiamond ->
+          "Circle"
+        // HIGH-PRIORITY TRIANGLE RESCUE: a gold Triangle with a central set
+        // icon and halo can light up a vertical+horizontal bar through the
+        // center, causing outer-candidate detection to pick Cross. But the
+        // geometry still reveals triangle-like mass asymmetry. Calibrated so
+        // real Diamonds (asymmetry <= 0.79) and Speed Crosses (asymmetry
+        // <= 0.69) don't trigger.
+        detection.name in listOf("Cross", "Square") &&
+          geometry.triangleScore >= 0.55 &&
+          geometry.asymmetry >= 0.90 &&
+          geometry.aspectRatio in 0.90..1.15 ->
+          "Triangle"
         detection.name == "Circle" &&
           geometry.extent >= 0.84 &&
           geometry.aspectRatio <= 1.08 &&
@@ -445,13 +490,23 @@ class ModIconClassifier(private val context: Context) {
         // (centered vertical+horizontal arms) and Square (via maskOnlyLooksSquare)
         // while still showing 4 strong diamond corners. Prefer Diamond when
         // diamondCornerScore is high and the outline is roughly square-aspect.
+        // Extent guard: a real Diamond leaves the bbox corners empty
+        // (extent ~0.65-0.70 in samples), while a Cross-with-set-icon fills
+        // more of the bbox (extent ~0.78). Blocks Cross misrescue without
+        // hurting rounded Diamonds.
         detection.name in listOf("Cross", "Square") &&
           geometry.diamondCornerScore >= 0.80 &&
-          geometry.aspectRatio in 0.92..1.10 ->
+          geometry.aspectRatio in 0.92..1.10 &&
+          geometry.extent <= 0.73 ->
           "Diamond"
+        // Cross -> Square rescue: only when no candidate actually saw a
+        // strong Cross signal. A Speed-set Cross has its arms highlighted
+        // in inner/outer candidate views even though mask-only looks square
+        // because of the icon+halo filling the bbox.
         detection.name == "Cross" &&
           maskOnlyLooksSquare &&
-          geometry.centerBarStrength <= 0.78 ->
+          geometry.centerBarStrength <= 0.78 &&
+          !anyCandidateStronglyCross ->
           "Square"
         detection.name == "Circle" &&
           anyCandidateLooksArrow ->
