@@ -457,6 +457,17 @@ class ModIconClassifier(private val context: Context) {
         val debug = candidate.ruleDebug
         debug != null && (debug.scores["Cross"] ?: 0.0) >= 0.60
       }
+    // squareLooksExplicit is a dedicated high-confidence Square flag set
+    // only when a candidate sees 4 straight edges, strong centered fill,
+    // and square-ish aspect. A real Square seen cleanly by inner/outer
+    // will set this with Square score >= 0.75. When it fires, trust it
+    // over any other misread (a Square whose outer candidate picked Cross
+    // because the icon+fill confused the outline tracer).
+    val anyCandidateLooksExplicitSquare =
+      detection.syntheticCandidateDebugs.any { candidate ->
+        val debug = candidate.ruleDebug ?: return@any false
+        debug.squareLooksExplicit && (debug.scores["Square"] ?: 0.0) >= 0.75
+      }
 
     try {
       Log.i("ModShapeDebug", "refineShapeSelection entry: name=${detection.name} smoothedCorners=${metrics.smoothedCornerCount} cornerCount=${metrics.cornerCount} dCorner=${geometry.diamondCornerScore} dDiag=${geometry.diamondDiagonalScore} triScore=${geometry.triangleScore}")
@@ -464,6 +475,27 @@ class ModIconClassifier(private val context: Context) {
 
     val forcedName =
       when {
+        // HIGH-PRIORITY CIRCLE -> SQUARE RESCUE: a Square whose mask-only
+        // silhouette has slightly rounded corners (e.g. portrait-erase
+        // ellipses clipping the left edges, or natural anti-aliasing) can
+        // score mask-only Circle if circularity ~ 0.84 and centerBar is low.
+        // But a circle physically cannot fill more than pi/4 ~= 0.785 of its
+        // bbox, and real Circle scans come in at extent 0.73-0.77. If
+        // mask-only extent >= 0.80, the silhouette is physically NOT a
+        // circle — it's a Square/rectangle with softened corners.
+        detection.name == "Circle" &&
+          maskOnlyDebug != null &&
+          maskOnlyDebug.geometry.extent >= 0.80 ->
+          "Square"
+        // HIGH-PRIORITY EXPLICIT-SQUARE RESCUE: the squareLooksExplicit flag
+        // is only set when a candidate sees 4 straight edges + centered fill
+        // + square aspect. It's the strongest Square signal we produce and
+        // outranks noisy Cross/Circle scores from other candidates. When any
+        // candidate fires it with Square >= 0.75, trust Square regardless of
+        // what top-level scoring picked.
+        detection.name != "Square" &&
+          anyCandidateLooksExplicitSquare ->
+          "Square"
         // HIGH-PRIORITY SQUARE -> CROSS RESCUE: when the outer candidate
         // traces a boxy outline around a Cross's icon+halo and squeaks past
         // Cross in final scoring, but >= 2 other candidates score Cross
