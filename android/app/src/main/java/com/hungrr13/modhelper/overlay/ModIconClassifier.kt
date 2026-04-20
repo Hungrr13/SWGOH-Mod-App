@@ -526,6 +526,7 @@ class ModIconClassifier(private val context: Context) {
           !anyCandidateStronglyCross ->
           "Square"
         detection.name == "Circle" &&
+          !winnerStronglyRound &&
           anyCandidateLooksArrow ->
           "Arrow"
         detection.name == "Circle" &&
