@@ -447,6 +447,16 @@ class ModIconClassifier(private val context: Context) {
         val debug = candidate.ruleDebug ?: return@any false
         (debug.scores["Cross"] ?: 0.0) >= 0.65
       }
+    // A Cross with a central icon can fool the outer candidate into tracing
+    // a near-square outline (extent ~0.75, circularity ~0.74) that scores
+    // Square slightly over Cross. But the inner / unguided / mask-only
+    // candidates each see the real cross arms and score Cross >= 0.60.
+    // When >= 2 candidates strongly agree it's a Cross, rescue from Square.
+    val strongCrossCandidateCount =
+      detection.syntheticCandidateDebugs.count { candidate ->
+        val debug = candidate.ruleDebug
+        debug != null && (debug.scores["Cross"] ?: 0.0) >= 0.60
+      }
 
     try {
       Log.i("ModShapeDebug", "refineShapeSelection entry: name=${detection.name} smoothedCorners=${metrics.smoothedCornerCount} cornerCount=${metrics.cornerCount} dCorner=${geometry.diamondCornerScore} dDiag=${geometry.diamondDiagonalScore} triScore=${geometry.triangleScore}")
@@ -454,6 +464,13 @@ class ModIconClassifier(private val context: Context) {
 
     val forcedName =
       when {
+        // HIGH-PRIORITY SQUARE -> CROSS RESCUE: when the outer candidate
+        // traces a boxy outline around a Cross's icon+halo and squeaks past
+        // Cross in final scoring, but >= 2 other candidates score Cross
+        // >= 0.60 from different vantage points, trust the majority.
+        detection.name == "Square" &&
+          strongCrossCandidateCount >= 2 ->
+          "Cross"
         // HIGH-PRIORITY CIRCLE RESCUE: a true Circle with a central set icon
         // can confuse outer/inner contour analysis into picking Square or
         // Diamond, but the mask-only candidate still sees the clean round
