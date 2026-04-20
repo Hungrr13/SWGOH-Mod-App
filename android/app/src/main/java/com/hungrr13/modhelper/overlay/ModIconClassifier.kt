@@ -405,6 +405,18 @@ class ModIconClassifier(private val context: Context) {
         val debug = candidate.ruleDebug ?: return@any false
         debug.arrowLooksCompact && (debug.scores["Arrow"] ?: 0.0) >= 0.50
       }
+    // When the winning candidate's own silhouette is very round
+    // (circularity >= 0.84 and square-ish aspect), block the Circle -> Diamond
+    // rescue rules below. The top-level geometry can still flag a high
+    // diamondCornerScore on noisy masks even when the true mod silhouette
+    // is round — the Grievous-Circle case, where a candidate literally says
+    // Circle:0.97 but geometry.diamondCornerScore is 0.92 because of
+    // artifacts from the character portrait.
+    val winnerStronglyRound =
+      detection.syntheticCandidateDebugs
+        .firstOrNull { it.label == detection.syntheticWinnerLabel }
+        ?.ruleDebug
+        ?.stronglyRound == true
     // A rounded-looking diamond (e.g. lens/petal shape) traces a near-round
     // outer contour that scores Circle highly, but a guided candidate that
     // sees the four diamond corners flags circleLooksDiamondish.
@@ -445,6 +457,7 @@ class ModIconClassifier(private val context: Context) {
           anyCandidateLooksArrow ->
           "Arrow"
         detection.name == "Circle" &&
+          !winnerStronglyRound &&
           anyCandidateLooksDiamond ->
           "Diamond"
         // Rounded Diamonds (e.g. lens/petal) can trace a near-circular outer
@@ -452,6 +465,7 @@ class ModIconClassifier(private val context: Context) {
         // diamond corners in the geometry. Rescue to Diamond BEFORE the
         // Circle->Triangle rule below, which also matches rounded shapes.
         detection.name == "Circle" &&
+          !winnerStronglyRound &&
           geometry.diamondCornerScore >= 0.80 &&
           geometry.aspectRatio in 0.92..1.12 ->
           "Diamond"
@@ -501,6 +515,7 @@ class ModIconClassifier(private val context: Context) {
           geometry.aspectRatio <= 1.30 ->
           "Triangle"
         detection.name == "Circle" &&
+          !winnerStronglyRound &&
           geometry.vertices in 4..6 &&
           geometry.diamondDiagonalScore >= 0.72 &&
           geometry.centerBarStrength <= 0.45 &&
