@@ -3,20 +3,35 @@ import { CHARS as RAW_CHARS } from '../data/chars';
 import { CHAR_BASE_IDS } from '../data/charBaseIds';
 import { evaluateSliceMod } from './sliceEngine';
 
+// Max rolls a single secondary can have at each tier. In SWGOH each tier
+// slice (E→D→C→B→A) adds one random roll to an existing secondary, so
+// 5E=1, 5D=2, 5C=3, 5B=4, 5A=5, 6E=5. Ignoring the tier was producing
+// impossible values like "Health% at 5 rolls" on a 5C scan.
+const MAX_ROLLS_BY_TIER = { '5E': 1, '5D': 2, '5C': 3, '5B': 4, '5A': 5, '6E': 5 };
+export function maxRollsForTier(tier) {
+  return MAX_ROLLS_BY_TIER[tier] ?? 5;
+}
+
 // Estimate a secondary's roll count from its numeric value when the (N)
-// prefix was missed by OCR. Returns null when the stat isn't in ROLL_DATA
-// or the value can't be parsed.
-export function estimateRolls(stat, value, dotLevel = 5) {
+// prefix was missed by OCR. Returns null when the stat isn't in ROLL_DATA,
+// the value can't be parsed, or the value is so far above the stat's max
+// possible that the (stat,value) pair is almost certainly an OCR misread
+// (e.g. a flat-Defense value of 30 being reported as Health%).
+export function estimateRolls(stat, value, dotLevel = 5, tier = null) {
   const data = ROLL_DATA[stat];
   if (!data) return null;
   const v = parseFloat(String(value ?? '').replace(/[^\d.]/g, ''));
   if (!Number.isFinite(v) || v <= 0) return null;
-  const min = dotLevel === 6 ? data.min6 : data.min5;
   const max = dotLevel === 6 ? data.max6 : data.max5;
-  for (let n = 1; n <= 5; n++) {
+  const cap = tier ? maxRollsForTier(tier) : 5;
+  // Reject values that exceed the tier's physical ceiling by >2% — this is
+  // the OCR-misread guard. A Health% value of 30 cannot be Health% at any
+  // roll count, so we prefer no estimate over a confidently wrong one.
+  if (v > cap * max * 1.02) return null;
+  for (let n = 1; n <= cap; n += 1) {
     if (v <= n * max * 1.02) return n;
   }
-  return 5;
+  return cap;
 }
 
 function resolveRolls(s) {

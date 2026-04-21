@@ -481,6 +481,8 @@ function AppShell() {
 
         const parsedShape = analysis.parsed.modShape;
         if (parsedShape && parsedShape !== 'Not found') {
+          const scannedTier = analysis.parsed.modTier || '';
+          const rollCap = overlayRecommendation.maxRollsForTier(scannedTier);
           const prefillSecs = (analysis.parsed.secondaries || []).slice(0, 4).map(s => {
             if (s?.hidden) {
               return { stat: '', value: '', rolls: '', hidden: true };
@@ -488,10 +490,19 @@ function AppShell() {
             const rawVal = String(s?.value ?? '').replace(/[+%]/g, '').trim();
             const stat = s?.stat && s.stat !== 'Not found' ? s.stat : '';
             let rolls = s?.rolls != null && s.rolls > 0 ? String(s.rolls) : '';
+            // Clamp any explicit roll count to the tier's physical ceiling
+            // (5E=1, 5D=2, ..., 5A=5). Prevents impossible OCR reads like
+            // "Health% at 5 rolls" on a 5C mod.
+            if (rolls && scannedTier) {
+              const n = parseInt(rolls, 10);
+              if (Number.isFinite(n) && n > rollCap) rolls = String(rollCap);
+            }
             // If OCR missed the "(N)" prefix, estimate rolls from the value
             // so the slice-tab roll pills populate instead of staying blank.
+            // Pass the scanned tier so the estimate respects the ceiling
+            // and rejects stat/value pairs that can't possibly fit.
             if (!rolls && stat && rawVal) {
-              const est = overlayRecommendation.estimateRolls(stat, rawVal);
+              const est = overlayRecommendation.estimateRolls(stat, rawVal, 5, scannedTier);
               if (est) rolls = String(est);
             }
             return { stat, value: rawVal, rolls, hidden: false };
@@ -502,7 +513,7 @@ function AppShell() {
             primary: analysis.parsed.primary && analysis.parsed.primary !== 'Not found' ? analysis.parsed.primary : '',
             modSet: analysis.parsed.modSet && analysis.parsed.modSet !== 'Not found' ? analysis.parsed.modSet : '',
             secondaries: prefillSecs,
-            tier: analysis.parsed.modTier || '',
+            tier: scannedTier,
           });
         }
         const needsReview = dual.slice.title === 'Capture Needs Review';

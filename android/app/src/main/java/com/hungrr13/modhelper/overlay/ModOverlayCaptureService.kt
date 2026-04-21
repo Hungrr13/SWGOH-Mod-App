@@ -1497,6 +1497,21 @@ class ModOverlayCaptureService : Service() {
     val topShapeDebug = iconDetection?.topShapeMatches?.take(5)?.joinToString(", ") { "${it.name}:${"%.3f".format(it.score)}" }
     Log.d(logTag, "sendCaptureSuccess: topShape=[$topShapeDebug]")
     Log.d(logTag, "sendCaptureSuccess: ocrText=${text.replace("\n", " | ")}")
+    try {
+      val outDir = getExternalFilesDir(null)
+      if (outDir != null) {
+        val dump = buildString {
+          append("lines=${lines.size}\n")
+          append("shape=${validatedShape ?: iconDetection?.shape}\n")
+          append("set=${normalizedSet ?: iconDetection?.setName}\n")
+          append("---RAW---\n")
+          append(text)
+          append("\n---LINES---\n")
+          lines.forEachIndexed { i, line -> append("[$i] $line\n") }
+        }
+        java.io.File(outDir, "ocr-debug-last.txt").writeText(dump)
+      }
+    } catch (_: Throwable) { /* debug dump is best-effort */ }
     val preview = buildCapturePreview(text, lines, iconDetection)
     val shapeForUi = validatedShape ?: iconDetection?.shape
     val isArrow = shapeForUi?.equals("Arrow", ignoreCase = true) == true
