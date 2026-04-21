@@ -59,11 +59,12 @@ export default function GacScreen() {
   const payload = snapshot?.[bracket] || null;
 
   useEffect(() => {
+    if (!unlocked) return;
     if (!payload && !loading) {
       load(bracket, false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bracket]);
+  }, [bracket, unlocked]);
 
   async function load(b, force) {
     setLoading(true);
@@ -107,26 +108,47 @@ export default function GacScreen() {
     return (bucket || []).slice(0, 30);
   })();
 
+  if (!unlocked) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <ScrollView contentContainerStyle={styles.scroll}>
+          <Text style={styles.title}>GAC Meta</Text>
+          <Text style={styles.subtitle}>
+            Top squads for Grand Arena Championship, tuned to your roster.
+          </Text>
+
+          <View style={styles.gateCard}>
+            <Text style={styles.gateTitle}>Premium feature</Text>
+            <Text style={styles.gateBody}>
+              Unlock GAC Meta to see what the top players are actually running —
+              and which of those squads you can field today.
+            </Text>
+            <View style={styles.featureList}>
+              <FeatureRow text="Top 3v3 and 5v5 squads, updated season by season" />
+              <FeatureRow text="Defense holds + offense counters side-by-side" />
+              <FeatureRow text="Auto-filtered to characters you already own" />
+              <FeatureRow text="Ranked by win-rate and your roster coverage" />
+              <FeatureRow text="Missing members called out so you know what to farm" />
+            </View>
+            <TouchableOpacity style={styles.unlockBtn} onPress={handleUnlock} activeOpacity={0.85}>
+              <Text style={styles.unlockBtnText}>Watch ad to unlock (24h)</Text>
+            </TouchableOpacity>
+            <Text style={styles.gateFootnote}>
+              Or upgrade to Premium from the menu for permanent ad-free access.
+            </Text>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.title}>GAC Meta</Text>
         <Text style={styles.subtitle}>
-          Top squads from swgoh.gg, {hasRoster ? 'ranked by your roster coverage' : 'global leaderboard'}.
+          {hasRoster ? 'Top squads ranked by your roster coverage.' : 'Top squads across the ladder.'}
         </Text>
-
-        {!unlocked ? (
-          <View style={styles.gateCard}>
-            <Text style={styles.gateTitle}>Premium feature</Text>
-            <Text style={styles.gateBody}>
-              GAC meta recommendations are a premium feature. Watch a short ad to
-              unlock for 24 hours, or upgrade to Premium for permanent ad-free access.
-            </Text>
-            <TouchableOpacity style={styles.unlockBtn} onPress={handleUnlock} activeOpacity={0.85}>
-              <Text style={styles.unlockBtnText}>Watch ad to unlock (24h)</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
 
         <View style={styles.toggleRow}>
           {['3v3', '5v5'].map(b => (
@@ -253,11 +275,19 @@ export default function GacScreen() {
           </View>
         ) : null}
 
-        {payload?.source ? (
-          <Text style={styles.source}>Source: swgoh.gg{'\n'}{payload.source}</Text>
-        ) : null}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function FeatureRow({ text }) {
+  const theme = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  return (
+    <View style={styles.featureRow}>
+      <Text style={styles.featureBullet}>✓</Text>
+      <Text style={styles.featureText}>{text}</Text>
+    </View>
   );
 }
 
@@ -294,6 +324,11 @@ const createStyles = colors => StyleSheet.create({
     alignItems: 'center', marginTop: 4,
   },
   unlockBtnText: { color: '#fff', fontWeight: '800', fontSize: 13 },
+  featureList: { gap: 6, marginTop: 4, marginBottom: 2 },
+  featureRow: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
+  featureBullet: { color: '#4ade80', fontSize: 13, fontWeight: '800', lineHeight: 18 },
+  featureText: { color: colors.text, fontSize: 12, lineHeight: 18, flex: 1 },
+  gateFootnote: { color: colors.muted, fontSize: 11, fontStyle: 'italic', textAlign: 'center', marginTop: 2 },
   infoCard: {
     backgroundColor: colors.surface, borderRadius: 10, borderWidth: 1,
     borderColor: colors.border, padding: 10,
