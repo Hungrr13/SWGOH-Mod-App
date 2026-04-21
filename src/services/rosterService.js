@@ -56,6 +56,32 @@ function normalizeCombatType(raw) {
   return s;
 }
 
+// swgoh.gg mod slot ids → in-game shape names
+const MOD_SLOT_TO_SHAPE = {
+  1: 'Square', 2: 'Arrow', 3: 'Diamond',
+  4: 'Triangle', 5: 'Circle', 6: 'Cross',
+};
+
+// swgoh.gg mod set ids → in-game set names
+const MOD_SET_ID_TO_NAME = {
+  1: 'Health', 2: 'Offense', 3: 'Defense', 4: 'Speed',
+  5: 'Crit Chance', 6: 'Crit Damage', 7: 'Tenacity', 8: 'Potency',
+};
+
+function normalizeMod(m) {
+  if (!m || typeof m !== 'object') return null;
+  const slotRaw = m.slot ?? m.slot_id ?? null;
+  const setRaw = m.set ?? m.set_id ?? null;
+  return {
+    id: m.id || m.mod_id || null,
+    slot: MOD_SLOT_TO_SHAPE[Number(slotRaw)] || null,
+    set: MOD_SET_ID_TO_NAME[Number(setRaw)] || null,
+    pips: Number(m.pips ?? m.rarity ?? 0) || 0, // 1..6 dots
+    level: Number(m.level ?? 0) || 0,            // 1..15
+    tier: Number(m.tier ?? 0) || 0,              // 1=E .. 5=A (6-dot)
+  };
+}
+
 function normalizeRoster(data, allyCode) {
   const units = Array.isArray(data?.units)
     ? data.units
@@ -67,6 +93,8 @@ function normalizeRoster(data, allyCode) {
     const d = u?.data || u || {};
     const id = String(d.base_id || '').toUpperCase();
     if (!id) continue;
+    const rawMods = Array.isArray(d.mods) ? d.mods : [];
+    const mods = rawMods.map(normalizeMod).filter(Boolean);
     roster[id] = {
       baseId: id,
       name: d.name || null,
@@ -75,6 +103,7 @@ function normalizeRoster(data, allyCode) {
       relicTier: apiRelicToGame(d.relic_tier),
       isGL: !!d.is_galactic_legend,
       combatType: normalizeCombatType(d.combat_type),
+      mods,
     };
   }
   return {
@@ -160,4 +189,33 @@ export function ownedBaseIdSet(rosterPayload) {
   return out;
 }
 
-export const __internal = { normalizeAllyCode, apiRelicToGame, normalizeRoster };
+// Returns a quick summary of a character's mod loadout. `baseId` is the
+// swgoh.gg base_id; returns null when the character isn't in the roster.
+//   missingSlots:  number of empty slots (0..6). A slot is "empty" only if
+//                  the mods array is present and < 6 entries, or a slot
+//                  shape is absent. If mods array is empty/missing, returns
+//                  null for this field (roster payload predates mod wiring).
+//   upgradeable:   count of mods worth sinking mats into (level<15 OR pips<6
+//                  OR tier<5). Also null when mods data isn't available.
+//   hasModData:    false if the source didn't include mod info for this unit
+export function modSummary(rosterPayload, baseId) {
+  const unit = rosterPayload?.roster?.[String(baseId || '').toUpperCase()];
+  if (!unit) return null;
+  const mods = Array.isArray(unit.mods) ? unit.mods : [];
+  if (mods.length === 0) {
+    return { missingSlots: null, upgradeable: null, hasModData: false };
+  }
+  const filledShapes = new Set(mods.map(m => m.slot).filter(Boolean));
+  const missingSlots = 6 - filledShapes.size;
+  let upgradeable = 0;
+  for (const m of mods) {
+    if (!m) continue;
+    // Level < 15, or not yet 6-dot, or tier < A (5) counts as upgradeable
+    if ((m.level || 0) < 15) upgradeable++;
+    else if ((m.pips || 0) < 6) upgradeable++;
+    else if ((m.tier || 0) < 5) upgradeable++;
+  }
+  return { missingSlots, upgradeable, hasModData: true };
+}
+
+export const __internal = { normalizeAllyCode, apiRelicToGame, normalizeRoster, normalizeMod };

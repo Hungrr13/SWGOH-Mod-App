@@ -18,6 +18,8 @@ import { CHARS as RAW_CHARS } from '../data/chars';
 import { evaluateSliceMod } from '../services/sliceEngine';
 import SlicerWhyPanel from '../components/SlicerWhyPanel';
 import * as premiumState from '../services/premiumState';
+import * as rosterState from '../services/rosterState';
+import { CHAR_BASE_IDS } from '../data/charBaseIds';
 
 // ── Decode chars once, deduplicate by name ───────────────────────────────────
 const _seen = new Set();
@@ -129,13 +131,38 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
   const [statModal, setStatModal] = useState(null);
   const [charsExpanded, setCharsExpanded] = useState(false);
   const [premium, setPremium] = useState(() => premiumState.getSnapshot());
+  const [rosterSnap, setRosterSnap] = useState(() => rosterState.getSnapshot());
+  const [ownedIds, setOwnedIds] = useState(() => rosterState.getCurrentOwnedIds());
 
   useEffect(() => {
     setPremium(premiumState.getSnapshot());
     return premiumState.subscribe(setPremium);
   }, []);
 
+  useEffect(() => {
+    setRosterSnap(rosterState.getSnapshot());
+    setOwnedIds(rosterState.getCurrentOwnedIds());
+    return rosterState.subscribe(snap => {
+      setRosterSnap(snap);
+      setOwnedIds(rosterState.getCurrentOwnedIds());
+    });
+  }, []);
+
   const whyUnlocked = premium.isPremium || premiumState.hasFeature(premiumState.FEATURES.SLICER_WHY);
+  const hasRoster = !!rosterSnap.hasRoster;
+  const showYours = premium.isPremium && hasRoster;
+
+  const isOwnedChar = (name) => {
+    if (!ownedIds) return false;
+    const baseId = CHAR_BASE_IDS[name];
+    return baseId ? ownedIds.has(baseId) : false;
+  };
+
+  const modStatusFor = (name) => {
+    const baseId = CHAR_BASE_IDS[name];
+    if (!baseId) return null;
+    return rosterState.getModSummary(baseId);
+  };
 
   const primOptions = shape ? SHAPE_PRIMARIES[shape] ?? [] : [];
 
@@ -464,51 +491,136 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
             )}
 
             {/* Best matching characters */}
-            {result.matchedCharacters.length > 0 && (
-              <View style={styles.card}>
-                <TouchableOpacity
-                  style={styles.cardTitleRow}
-                  onPress={() => setCharsExpanded(e => !e)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.cardTitle}>
-                    Best Characters ({result.matchedCount})
-                  </Text>
-                  <Text style={styles.chevron}>{charsExpanded ? '▲' : '▼'}</Text>
-                </TouchableOpacity>
-                {charsExpanded && result.matchedCharacters.map((c, i) => {
-                  const topScore = result.matchedCharacters[0]?.matchScore ?? c.matchScore;
-                  const matchMeta = getMatchPresentation(c.matchScore, topScore, i);
-                  const fillWidth = topScore > 0 ? `${Math.max(16, Math.round((c.matchScore / topScore) * 100))}%` : '16%';
-                  return (
-                  <View key={i} style={styles.charRow}>
+            {result.matchedCharacters.length > 0 && (() => {
+              const topScore = result.matchedCharacters[0]?.matchScore ?? 0;
+              const ownedMatches = result.matchedCharacters.filter(c => isOwnedChar(c.name));
+              const renderCharRow = (c, i, { compact = false, showNotOwned = false } = {}) => {
+                const matchMeta = getMatchPresentation(c.matchScore, topScore, i);
+                const fillWidth = topScore > 0 ? `${Math.max(16, Math.round((c.matchScore / topScore) * 100))}%` : '16%';
+                const owned = isOwnedChar(c.name);
+                return (
+                  <View key={`${c.name}-${i}`} style={styles.charRow}>
                     <View style={styles.charHeader}>
                       <View style={styles.charTitleWrap}>
-                        <Text style={styles.charName}>{c.name}</Text>
+                        <Text style={styles.charName} numberOfLines={1}>{c.name}</Text>
                         <View style={[styles.rankBadge, { borderColor: matchMeta.tone }]}>
                           <Text style={[styles.rankBadgeText, { color: matchMeta.tone }]}>{`#${i + 1}`}</Text>
                         </View>
                       </View>
-                      <Text style={styles.charVariant}>
-                        {c.variant === 'alternate' ? 'Alt build' : 'Main build'}
-                      </Text>
+                      {!compact && (
+                        <Text style={styles.charVariant}>
+                          {c.variant === 'alternate' ? 'Alt build' : 'Main build'}
+                        </Text>
+                      )}
                     </View>
+                    {(() => {
+                      const badges = [];
+                      if (showNotOwned && !owned) {
+                        badges.push(
+                          <View key="not" style={[styles.miniBadge, styles.badgeNotOwned]}>
+                            <Text style={[styles.miniBadgeText, { color: '#fca5a5' }]}>Not in roster</Text>
+                          </View>
+                        );
+                      } else if (owned) {
+                        const mods = modStatusFor(c.name);
+                        if (mods?.hasModData) {
+                          if (mods.missingSlots > 0) {
+                            badges.push(
+                              <View key="empty" style={[styles.miniBadge, styles.badgeEmptySlot]}>
+                                <Text style={[styles.miniBadgeText, { color: '#fde047' }]}>
+                                  {`${mods.missingSlots} empty slot${mods.missingSlots === 1 ? '' : 's'}`}
+                                </Text>
+                              </View>
+                            );
+                          }
+                          if (mods.upgradeable > 0) {
+                            badges.push(
+                              <View key="up" style={[styles.miniBadge, styles.badgeUpgrade]}>
+                                <Text style={[styles.miniBadgeText, { color: '#93c5fd' }]}>
+                                  {`${mods.upgradeable} to upgrade`}
+                                </Text>
+                              </View>
+                            );
+                          }
+                        }
+                      }
+                      return badges.length ? <View style={styles.badgeRow}>{badges}</View> : null;
+                    })()}
                     <View style={styles.matchSummary}>
                       <View style={styles.matchSummaryRow}>
                         <Text style={[styles.matchSummaryText, { color: matchMeta.tone }]}>{matchMeta.label}</Text>
-                        <Text style={styles.matchSummaryRank}>{`${c.alignedCount} stat${c.alignedCount === 1 ? '' : 's'} aligned`}</Text>
+                        {!compact && (
+                          <Text style={styles.matchSummaryRank}>{`${c.alignedCount} stat${c.alignedCount === 1 ? '' : 's'} aligned`}</Text>
+                        )}
                       </View>
                       <View style={[styles.matchMeter, { backgroundColor: matchMeta.track }]}>
                         <View style={[styles.matchMeterFill, { width: fillWidth, backgroundColor: matchMeta.tone }]} />
                       </View>
                     </View>
-                    <Text style={styles.charPriorities}>
-                      {c.priorities.join(' › ')}
-                    </Text>
+                    {!compact && (
+                      <Text style={styles.charPriorities}>{c.priorities.join(' › ')}</Text>
+                    )}
                   </View>
-                )})}
-              </View>
-            )}
+                );
+              };
+
+              if (showYours) {
+                const yoursVisible = charsExpanded ? ownedMatches : ownedMatches.slice(0, 3);
+                const bestVisible = charsExpanded ? result.matchedCharacters : result.matchedCharacters.slice(0, 3);
+                return (
+                  <View style={styles.splitRow}>
+                    <View style={[styles.card, styles.splitCard]}>
+                      <TouchableOpacity
+                        style={styles.cardTitleRow}
+                        onPress={() => setCharsExpanded(e => !e)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.cardTitle} numberOfLines={1}>
+                          Your Roster ({ownedMatches.length})
+                        </Text>
+                        <Text style={styles.chevron}>{charsExpanded ? '▲' : '▼'}</Text>
+                      </TouchableOpacity>
+                      {ownedMatches.length === 0 ? (
+                        <Text style={styles.emptyHint}>No owned characters match this mod.</Text>
+                      ) : (
+                        yoursVisible.map((c, i) => renderCharRow(c, result.matchedCharacters.indexOf(c), { compact: true }))
+                      )}
+                    </View>
+                    <View style={[styles.card, styles.splitCard]}>
+                      <TouchableOpacity
+                        style={styles.cardTitleRow}
+                        onPress={() => setCharsExpanded(e => !e)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.cardTitle} numberOfLines={1}>
+                          Best Fit ({result.matchedCount})
+                        </Text>
+                        <Text style={styles.chevron}>{charsExpanded ? '▲' : '▼'}</Text>
+                      </TouchableOpacity>
+                      {bestVisible.map((c, i) => renderCharRow(c, i, { compact: true, showNotOwned: true }))}
+                    </View>
+                  </View>
+                );
+              }
+
+              return (
+                <View style={styles.card}>
+                  <TouchableOpacity
+                    style={styles.cardTitleRow}
+                    onPress={() => setCharsExpanded(e => !e)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.cardTitle}>
+                      Best Characters ({result.matchedCount})
+                    </Text>
+                    <Text style={styles.chevron}>{charsExpanded ? '▲' : '▼'}</Text>
+                  </TouchableOpacity>
+                  {charsExpanded && result.matchedCharacters.map((c, i) =>
+                    renderCharRow(c, i, { showNotOwned: hasRoster })
+                  )}
+                </View>
+              );
+            })()}
           </>
         )}
 
@@ -824,6 +936,33 @@ const createStyles = colors => StyleSheet.create({
     borderRadius: 999,
   },
   charPriorities: { color: '#60a5fa', fontSize: 12 },
+  splitRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  splitCard: {
+    flex: 1,
+    marginBottom: 0,
+    padding: 10,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 2,
+  },
+  miniBadge: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+  },
+  miniBadgeText: { fontSize: 10, fontWeight: '700' },
+  badgeNotOwned: { borderColor: '#f87171', backgroundColor: '#2a1116' },
+  badgeEmptySlot: { borderColor: '#facc15', backgroundColor: '#2a2410' },
+  badgeUpgrade: { borderColor: '#60a5fa', backgroundColor: '#122c3f' },
+  emptyHint: { color: colors.soft, fontSize: 12, fontStyle: 'italic', paddingVertical: 4 },
   // ── Stat quality ──
   statQualityRow: {
     marginBottom: 10,

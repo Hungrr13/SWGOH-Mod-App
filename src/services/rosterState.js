@@ -3,7 +3,7 @@
 // handler reads getCurrentOwnedIds() synchronously when a scan fires, so
 // we keep the Set in memory rather than awaiting storage on the hot path.
 
-import { fetchRoster, clearCachedRoster, ownedBaseIdSet } from './rosterService';
+import { fetchRoster, clearCachedRoster, ownedBaseIdSet, modSummary } from './rosterService';
 
 let AsyncStorage = null;
 try {
@@ -53,6 +53,10 @@ export function getCurrentAllyCode() {
 
 export function getCurrentRoster() {
   return currentRoster;
+}
+
+export function getModSummary(baseId) {
+  return modSummary(currentRoster, baseId);
 }
 
 export function subscribe(listener) {
