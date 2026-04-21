@@ -65,7 +65,9 @@ export default function AllyCodePanel() {
   };
 
   const handleLoad = async () => {
-    const digits = input.replace(/\D/g, '');
+    const typedDigits = input.replace(/\D/g, '');
+    const fallback = snapshot.hasRoster ? String(snapshot.allyCode || '') : '';
+    const digits = typedDigits.length === 9 ? typedDigits : fallback;
     if (digits.length !== 9) {
       setStatus({ kind: 'err', text: 'Ally code must be 9 digits.' });
       return;
