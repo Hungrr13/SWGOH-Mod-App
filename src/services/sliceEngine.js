@@ -916,10 +916,13 @@ function getNextHitNarrative(scoredStats) {
 
 // Tier-ladder projection: walk E -> D -> C -> B -> A -> 6E from the scanned
 // mod's current tier, using the already-revealed rolls as signal about how
-// the mod is trending. Returns one of four verdicts:
+// the mod is trending. Returns one of five verdicts:
 //   - USABLE:        worth slicing all the way to 6E (mat investment justified).
-//   - CAP_AT_5A:     worth finishing the 5-dot climb but NOT spending 6E mats.
-//   - SELLABLE:      bail out now — further mat slices won't pay off.
+//   - CAP_AT_5A:     already at 5A — level 1→15 for money (no mats), equip.
+//                    Skip 6E. Cheap climb still pays off.
+//   - FILLER:        pre-5A, stats decent enough to equip but no 6-dot catalyst.
+//                    Do NOT burn tier mats. Equip as-is, replace when better lands.
+//   - SELLABLE:      weak across the board — sell outright.
 //   - NOT_SLICEABLE: can't meaningfully walk the ladder (already 6E, no tier,
 //                    no character wants this shell).
 //
@@ -958,6 +961,13 @@ function buildLadderPlan({
     color: '#facc15',
     desc: reason,
     stopAt: '5A',
+  });
+  const filler = (at, reason) => ({
+    verdict: 'FILLER',
+    label: 'Filler',
+    color: '#60a5fa',
+    desc: reason,
+    stopAt: at,
   });
   const usable = (reason) => ({
     verdict: 'USABLE',
@@ -1016,16 +1026,35 @@ function buildLadderPlan({
   }
   if (speedBacked) return usable(`Speed at ${speedSec.val} (${speedSec.rolls} rolls) with solid overall quality — worth 6-dot.`);
 
-  // Worth finishing the cheap 5A climb (levels are money-only) but not 6-dot mats.
-  if (finalScore >= 40 || priorityCount >= 2) {
-    return capAt5A(
-      speedSec
-        ? `Speed only at ${speedSec.rolls} roll${speedSec.rolls === 1 ? '' : 's'} — finish 5A levels for free, but 6-dot mats are a stretch.`
-        : 'Decent fit but no 6-dot catalyst (Speed hits / high-gain priority) — stop at 5A.',
+  // Cap at 5A: only fires when the mod is ALREADY at 5A. Leveling 5A 1→15 is
+  // money-only (reveals hidden rolls), so "stop at 5A" is a meaningful resting
+  // place. At 5B/5C/5D/5E, reaching 5A still costs tier mats — if we've ruled
+  // out 6-dot we should NOT burn mats chasing 5A. Decent stats at a lower
+  // tier become Filler (equip as-is until replaced), weak stats are Sellable.
+  const hasDecentFit = finalScore >= 40 || priorityCount >= 2;
+
+  if (tier === '5A') {
+    if (hasDecentFit) {
+      return capAt5A(
+        speedSec
+          ? `Speed only at ${speedSec.rolls} roll${speedSec.rolls === 1 ? '' : 's'} — finish 5A levels for free, but 6-dot mats are a stretch.`
+          : 'Decent fit but no 6-dot catalyst (Speed hits / high-gain priority) — level to 15 and equip, skip 6-dot.',
+      );
+    }
+    return sellable(tier, 'At 5A but weak fit and no 6-dot catalyst — sell.');
+  }
+
+  if (hasDecentFit) {
+    return filler(
+      tier,
+      `Decent stats but no 6-dot catalyst — equip as filler at ${tier}, skip the ${tier}→5A mats, replace when you find better.`,
     );
   }
 
-  return sellable(tier, 'Weak overall — neither Speed nor priority quality justify further mats.');
+  return sellable(
+    tier,
+    `Weak fit and no 6-dot catalyst — ${tier}→5A mats would be wasted, sell outright.`,
+  );
 }
 
 export function evaluateSliceMod({
