@@ -111,6 +111,23 @@ This is the current repo map after the cleanup pass. If you are not sure where t
 
 ## Recent changes (April 2026)
 
+### Slice engine: community-tuned weights + thresholds
+- Audited `sliceRules.js` weights and `buildLadderPlan` thresholds against the community consensus (swgoh.gg top-1000 Kyber GAC meta, Grandivory `characterSettings.js`, Crouching-Rancor efficiency formula, and YouTube guidance from Warrior / MobileGamer / Ahnaldt101).
+- Weight change: `Defense%` dropped from `5.0` → `4.0`. Community consensus is ~3–4; our previous 5.0 was biasing tank mods ~25% above consensus.
+- Ladder change: `strongUpside` SLICE_GAIN cutoff lowered from `>= 0.5` → `>= 0.3`. This brings `Protection%` (SLICE_GAIN 0.33) into the 6-dot-catalyst bucket so a Prot%-primary mod with strong Prot% secondary rolls can earn a `Usable` verdict instead of falling through to `Cap at 5A` / `Filler`.
+- Ladder change: `hasDecentFit` floor raised from `finalScore >= 40` → `>= 50`. Grandivory's `HOLD` band is 60, so a 40-floor was pushing mediocre mods into `Filler` too eagerly. New floor also tightens the `Cap at 5A` gate so only mods with genuine fit encourage finishing the free 5A level climb.
+- Verified unchanged: Speed-arrow rule (always Usable when Speed secondary present), Speed-secondary `>= 3 rolls` → Usable, 3+ flat base secondaries → `forcedsell`, `avgPriorityQuality < 35 && finalScore < 40` → Sellable pre-5A, and the Crouching-Rancor efficiency formula `(value - r*min) / (r*(max - min))` in `rollEfficiency`.
+
+### Slice engine: 5-state tier-ladder verdict
+- `buildLadderPlan()` in `sliceEngine.js` walks the tier ladder `5E → 5D → 5C → 5B → 5A → 6E`, reading the revealed secondaries, priority-stat hit count, and average roll quality to emit a 5-state verdict surfaced in a new ladder card on `SliceScreen.js`:
+  - **Usable** (green) — worth taking to 6E (Speed arrow + Speed sec; Speed sec ≥3 rolls; high-SLICE_GAIN priority stat rolled ≥65% quality; or Speed ≥2 rolls backed by ≥55% avg quality).
+  - **Cap at 5A** (yellow) — only fires when `tier === '5A'` and `hasDecentFit` is true. Message: finish the free money 5A 1→15 climb but skip 6-dot mats.
+  - **Filler** (blue) — mod is at 5B/5C/5D/5E with `hasDecentFit` but no 6-dot catalyst. "Equip as-is at current tier until a better replacement appears; don't spend tier-slice mats."
+  - **Sellable** (red) — forced-sell on 3+ flat base stats, or pre-5A mods with no priority hits + no Speed, or pre-5A mods with `avgPriorityQuality < 35 && finalScore < 40`, or 5A mods with weak fit.
+  - **Not sliceable** (grey) — already 6E, no tier selected, or no character build uses the shell/primary.
+- The `Cap at 5A` guard is important: prior to the fix it fired on any tier with a decent fit, which implicitly pushed users to burn tier-slice mats (5B→5A, 5C→5B, etc.). Within-tier level 1→15 costs credits only; tier slices cost mats. `Filler` is the correct verdict for decent-but-not-slice-worthy mods sitting below 5A.
+- `SLICE_GAIN` table in `modData.js` drives the 6-dot catalyst rule: stats whose cap jumps meaningfully at 6E (Offense% 2.02×, Defense% 1.34×, Health% 0.78×, Protection% 0.33×) are candidates; stats that barely move (Speed 0.03×, Crit Chance% 0.04×) are not — which is why Speed secondaries don't justify 6E on their own, only Speed arrow primaries do.
+
 ### chars.js refreshed from swgoh.gg mod meta report
 - `src/data/chars.js` rewritten against `https://swgoh.gg/stats/mod-meta-report/` — the single-page consensus table that lists recommended sets + per-shape primary for every character. 277 entries had drifted from the current meta (e.g. Aayla cross `Potency` → `Protection/Offense`, Ahsoka Tano set `Offense(x4)+Health(x2)` → `Speed(x4)+Health(x2)`). 47 entries were already correct. 1 character (Cobb Vanth) isn't in the meta table yet and was left as-is. `src/data/chars.js.bak` is the pre-rewrite snapshot.
 - Verifier: `tools/verify-chars-vs-swgoh.js`. Fetches the meta report through our Cloudflare Worker (scrape allow-list now includes `/stats/`), parses each `<tbody>` row (character slug, stacked `stat-mod-set-def-icon--set-<id>` icons, last 4 `<td>`s = Arrow/Triangle/Circle/Cross primaries), and diffs against `chars.js`. Supports multi-primary tolerance lists like `Protection / Tenacity` — a local value is a match if it appears anywhere in the reported list. Run dry: `node tools/verify-chars-vs-swgoh.js`. Apply: `node tools/verify-chars-vs-swgoh.js --apply`.

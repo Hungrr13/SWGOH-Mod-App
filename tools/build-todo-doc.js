@@ -220,8 +220,14 @@ const rows = [
   todoRow(
     'DONE',
     'Slice engine / tier progression',
-    'Walk tier ladder (E \u2192 D \u2192 C \u2192 B \u2192 A \u2192 6E) using actual rolled secondaries as signal. 4-state verdict: Usable / Cap at 5A / Sellable / Not sliceable.',
-    'buildLadderPlan() in sliceEngine.js reads scoredStats + secondaries, gates the pre-5A mat-cost path on priority-hit presence + quality, and gates the 5A\u21926E mat-cost path on Speed evidence or high-SLICE_GAIN priority rolls. SliceScreen renders a ladder verdict card above the Decision card. Cap at 5A is new \u2014 \u201cfinish the free-money climb but skip 6-dot mats.\u201d Archive on next sweep.',
+    'Walk tier ladder (E \u2192 D \u2192 C \u2192 B \u2192 A \u2192 6E) using actual rolled secondaries as signal. 5-state verdict: Usable / Cap at 5A / Filler / Sellable / Not sliceable.',
+    'buildLadderPlan() in sliceEngine.js reads scoredStats + secondaries, gates the pre-5A mat-cost path on priority-hit presence + quality, and gates the 5A\u21926E mat-cost path on Speed evidence or high-SLICE_GAIN priority rolls. SliceScreen renders a ladder verdict card above the Decision card. Cap at 5A is scoped to mods already at 5A so sub-5A mods aren\u2019t pushed to burn mats. Filler (blue) covers \u201cdecent stats but no 6-dot catalyst \u2014 equip as-is until replaced.\u201d Archive on next sweep.',
+  ),
+  todoRow(
+    'DONE',
+    'Slice engine / community tuning',
+    'Audit weights + ladder thresholds against community guidance (swgoh.gg top-1000 Kyber meta, Grandivory, Crouching-Rancor)',
+    'Defense% weight 5.0 \u2192 4.0 (was biasing tanks ~25% above consensus). strongUpside SLICE_GAIN cutoff 0.5 \u2192 0.3 so Protection% (0.33) counts as a 6-dot catalyst on Prot%-primary mods with strong rolls. hasDecentFit finalScore floor 40 \u2192 50 to tighten the Filler / Cap-at-5A gate vs Grandivory\u2019s HOLD=60. Flat-stat sell, Speed-arrow rule, and Crouching-Rancor rollEfficiency formula verified against sources. See sliceRules.js weights + buildLadderPlan() in sliceEngine.js. Archive on next sweep.',
   ),
   todoRow(
     'DONE',
