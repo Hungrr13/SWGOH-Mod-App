@@ -150,8 +150,8 @@ export async function fetchRoster(allyCode, options = {}) {
   }
 
   const url = API_BASE.includes('?')
-    ? `${API_BASE}${code}`
-    : `${API_BASE}${API_BASE.endsWith('/') ? '' : '/'}${code}/`;
+    ? `${API_BASE}${code}&mods=1`
+    : `${API_BASE}${API_BASE.endsWith('/') ? '' : '/'}${code}/?mods=1`;
   const resp = await fetch(url, {
     headers: { Accept: 'application/json' },
   });
