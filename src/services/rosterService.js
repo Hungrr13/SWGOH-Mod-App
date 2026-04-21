@@ -26,7 +26,7 @@ export function setRosterApiBase(url) {
   API_BASE = url || DEFAULT_API_BASE;
 }
 
-const CACHE_KEY_PREFIX = 'swgoh_roster_';
+const CACHE_KEY_PREFIX = 'swgoh_roster_v2_';
 const DEFAULT_TTL_MS = 6 * 60 * 60 * 1000;
 
 let AsyncStorage = null;
