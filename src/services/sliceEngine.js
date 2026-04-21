@@ -156,15 +156,22 @@ function deriveAltPrioritiesFromFocus(char) {
   const mainList = parsePriorityList(char.secs || "");
   if (mainList.length < 2) return null;
 
-  const ranked = Object.entries(focus)
-    .map(([stat, info]) => ({
-      stat: normalizeFocusStatName(stat),
-      usagePct: Number(info?.usagePct) || 0,
-    }))
+  // Coalesce flat + % variants: Health and Health% are the same target for
+  // priority-list purposes, with % being strictly better. Keep the max
+  // usagePct across both variants and always emit the % form.
+  const coalesced = new Map();
+  for (const [rawStat, info] of Object.entries(focus)) {
+    const promoted = normalizePriorityName(rawStat);
+    const usagePct = Number(info?.usagePct) || 0;
+    const prev = coalesced.get(promoted) || 0;
+    if (usagePct > prev) coalesced.set(promoted, usagePct);
+  }
+  const ranked = Array.from(coalesced.entries())
+    .map(([stat, usagePct]) => ({ stat, usagePct }))
     .sort((a, b) => b.usagePct - a.usagePct);
   if (ranked.length < 4) return null;
 
-  const normMain = mainList.map((s) => normalizeFocusStatName(s));
+  const normMain = mainList.map((s) => normalizePriorityName(s));
   const speedIdxInMain = normMain.findIndex((s) => s === "Speed");
 
   const topNames = new Set([normMain[0], normMain[1]]);
@@ -208,6 +215,25 @@ function normalizeFocusStatName(stat = "") {
     .replace(/^Critical Avoidance\s*%$/i, "Crit Avoidance%")
     .replace(/^Critical Damage\s*%?$/i, "Crit Dmg%")
     .trim();
+}
+
+// Promote a flat stat to its % variant for priority-list matching. A
+// character priority of "Health" (flat) is satisfied by a scanned Health%
+// secondary — % is strictly better than flat, so it should always count as
+// a match. Scanned flat stats already get a FLAT_TIEBREAKER_MULTIPLIER
+// penalty in scoreEnteredSecondaries, so the reverse case (% priority met
+// by a scanned flat) is already down-weighted.
+function promoteToPercent(stat = "") {
+  const s = String(stat).trim();
+  if (s === "Offense") return "Offense%";
+  if (s === "Health") return "Health%";
+  if (s === "Protection") return "Protection%";
+  if (s === "Defense") return "Defense%";
+  return s;
+}
+
+function normalizePriorityName(stat = "") {
+  return promoteToPercent(normalizeFocusStatName(stat));
 }
 
 function inferBuildTags(char, priorityList) {
@@ -421,7 +447,7 @@ function scoreMatchAgainstEnteredSecondaries(match, secondaries, selectedPrimary
   const focusMap = SEC_FOCUS[match.name] || {};
   const entered = secondaries
     .filter((s) => s && s.name && s.val !== "")
-    .map((s) => normalizeFocusStatName(FLAT_TO_PERCENT[s.name] ?? s.name));
+    .map((s) => normalizePriorityName(FLAT_TO_PERCENT[s.name] ?? s.name));
 
   let secondaryScore = 0;
   let alignedCount = 0;
@@ -430,7 +456,7 @@ function scoreMatchAgainstEnteredSecondaries(match, secondaries, selectedPrimary
   const alignedStats = [];
   const offPriorityHits = [];
   for (const stat of entered) {
-    const idx = match.priorityList.findIndex((priority) => normalizeFocusStatName(priority) === stat);
+    const idx = match.priorityList.findIndex((priority) => normalizePriorityName(priority) === stat);
     const focus = focusMap[stat];
 
     if (idx !== -1) {
@@ -464,9 +490,9 @@ function scoreMatchAgainstEnteredSecondaries(match, secondaries, selectedPrimary
   let primaryBonus = 0;
   let primaryPriorityIndex = -1;
   if (selectedPrimary) {
-    const normalizedPrimary = normalizeFocusStatName(selectedPrimary);
+    const normalizedPrimary = normalizePriorityName(selectedPrimary);
     const pidx = match.priorityList.findIndex(
-      (priority) => normalizeFocusStatName(priority) === normalizedPrimary
+      (priority) => normalizePriorityName(priority) === normalizedPrimary
     );
     if (pidx !== -1) {
       primaryBonus = priorityBandPoints(pidx);
