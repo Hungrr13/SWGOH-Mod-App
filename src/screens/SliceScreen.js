@@ -448,6 +448,25 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
           <>
             {/* Tier action card intentionally removed — the Decision card below is the single verdict. */}
 
+            {/* Slice-ladder verdict (E → D → C → B → A → 6E projection) */}
+            {result.ladderPlan && (
+              <View style={[styles.verdictCard, styles.ladderCard, { borderColor: result.ladderPlan.color }]}>
+                <Text style={[styles.verdictLabel, { color: result.ladderPlan.color }]}>
+                  {result.ladderPlan.label}
+                </Text>
+                {result.ladderPlan.stopAt && (
+                  <Text style={styles.ladderStopAt}>
+                    {result.ladderPlan.verdict === 'USABLE'
+                      ? 'Slice path: current → 6E'
+                      : result.ladderPlan.verdict === 'CAP_AT_5A'
+                        ? 'Slice path: current → 5A (skip 6-dot)'
+                        : `Stop at: ${result.ladderPlan.stopAt}`}
+                  </Text>
+                )}
+                <Text style={styles.verdictMeaning}>{result.ladderPlan.desc}</Text>
+              </View>
+            )}
+
             {/* Decision */}
             <View style={[styles.verdictCard, { borderColor: decisionColor(result.decision) }]}>
               <Text style={[styles.verdictLabel, { color: decisionColor(result.decision) }]}>
@@ -975,6 +994,17 @@ const createStyles = colors => StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
     lineHeight: 18,
+  },
+  ladderCard: {
+    marginBottom: 8,
+  },
+  ladderStopAt: {
+    color: colors.text,
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 4,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   // ── Score grid ──
   scoreGrid: {

@@ -1,6 +1,6 @@
 import { SLICE_RULES } from './sliceRules';
 import { SEC_FOCUS } from '../data/secFocus';
-import { rollEfficiency, SLICE_GAIN } from '../constants/modData';
+import { rollEfficiency, SLICE_GAIN, MOD_TIERS } from '../constants/modData';
 
 const FIXED_PRIMARY = {
   Square: "Offense%",
@@ -914,6 +914,120 @@ function getNextHitNarrative(scoredStats) {
   };
 }
 
+// Tier-ladder projection: walk E -> D -> C -> B -> A -> 6E from the scanned
+// mod's current tier, using the already-revealed rolls as signal about how
+// the mod is trending. Returns one of four verdicts:
+//   - USABLE:        worth slicing all the way to 6E (mat investment justified).
+//   - CAP_AT_5A:     worth finishing the 5-dot climb but NOT spending 6E mats.
+//   - SELLABLE:      bail out now — further mat slices won't pay off.
+//   - NOT_SLICEABLE: can't meaningfully walk the ladder (already 6E, no tier,
+//                    no character wants this shell).
+//
+// The decision thresholds weigh two things differently:
+//   pre-5A steps cost mats each, so any sign of wasted rolls (no priority hits,
+//   priority stats at min efficiency) triggers an early bail. The 5A -> 6E
+//   step also costs mats, so the bar to continue is higher — we need Speed
+//   evidence or a high-SLICE_GAIN priority stat rolled well.
+function buildLadderPlan({
+  tier,
+  finalScore,
+  scoredStats,
+  secondaries,
+  shape,
+  primary,
+  forcedsell,
+  noBuildUse,
+}) {
+  const notSliceable = (reason) => ({
+    verdict: 'NOT_SLICEABLE',
+    label: 'Not sliceable',
+    color: '#94a3b8',
+    desc: reason,
+    stopAt: null,
+  });
+  const sellable = (at, reason) => ({
+    verdict: 'SELLABLE',
+    label: 'Sellable',
+    color: '#f87171',
+    desc: reason,
+    stopAt: at,
+  });
+  const capAt5A = (reason) => ({
+    verdict: 'CAP_AT_5A',
+    label: 'Cap at 5A',
+    color: '#facc15',
+    desc: reason,
+    stopAt: '5A',
+  });
+  const usable = (reason) => ({
+    verdict: 'USABLE',
+    label: 'Usable',
+    color: '#4ade80',
+    desc: reason,
+    stopAt: '6E',
+  });
+
+  if (noBuildUse) return notSliceable('No character build uses this shell.');
+  if (!tier || !MOD_TIERS.includes(tier)) return notSliceable('No tier selected — choose the mod tier to project the slice path.');
+  if (tier === '6E') return notSliceable('Already 6-dot — evaluate as a finished mod, not a slicing candidate.');
+  if (forcedsell) return sellable(tier, '3+ flat base stats — low ceiling, not worth the mats.');
+
+  const revealed = (secondaries || []).filter(
+    (s) => s && s.name && s.val !== '' && parseInt(s.rolls, 10) > 0,
+  );
+  const speedSec = revealed.find((s) => s.name === 'Speed');
+  const priorityStats = (scoredStats || []).filter((s) => s.targetWeight >= 40);
+  const priorityCount = priorityStats.length;
+  const avgPriorityQuality = priorityCount
+    ? priorityStats.reduce((a, s) => a + s.qualityPct, 0) / priorityCount
+    : 0;
+  const strongUpside = priorityStats.some(
+    (s) => (SLICE_GAIN[s.name] ?? 0) >= 0.5 && s.qualityPct >= 65,
+  );
+  const speedArrow = shape === 'Arrow' && primary === 'Speed';
+  const matsAhead = tier !== '5A';
+
+  // Pre-5A bail — mats are wasted when priority is absent and Speed hasn't hit.
+  if (matsAhead && priorityCount === 0 && !speedSec) {
+    return sellable(tier, 'No priority-stat hits and no Speed — next tier burns mats for nothing.');
+  }
+  if (
+    matsAhead &&
+    !speedSec &&
+    avgPriorityQuality < 35 &&
+    finalScore < 40
+  ) {
+    return sellable(
+      tier,
+      `Priority rolls trending minimal (${Math.round(avgPriorityQuality)}%) — cut losses before more mats.`,
+    );
+  }
+
+  // 5A -> 6E decision. Speed evidence or a high-gain priority stat rolled well
+  // justifies 6-dot mats; otherwise stop at 5A.
+  const speedHitHard = speedSec && parseInt(speedSec.rolls, 10) >= 3;
+  const speedBacked = speedSec && parseInt(speedSec.rolls, 10) >= 2 && avgPriorityQuality >= 55;
+
+  if (speedArrow && speedSec) return usable('Speed arrow with Speed secondary — always worth 6-dot.');
+  if (speedHitHard) return usable(`Speed hit ${speedSec.rolls} rolls at value ${speedSec.val} — 6-dot slice is a strong bet.`);
+  if (strongUpside) {
+    const top = priorityStats.find((s) => (SLICE_GAIN[s.name] ?? 0) >= 0.5 && s.qualityPct >= 65);
+    return usable(`${top.name} rolling at ${Math.round(top.qualityPct)}% quality — 6-dot multiplies the cap.`);
+  }
+  if (speedBacked) return usable(`Speed at ${speedSec.val} (${speedSec.rolls} rolls) with solid overall quality — worth 6-dot.`);
+
+  // Worth finishing the cheap 5A climb (levels are money-only) but not 6-dot mats.
+  if (finalScore >= 40 || priorityCount >= 2) {
+    return capAt5A(
+      speedSec
+        ? `Speed only at ${speedSec.rolls} roll${speedSec.rolls === 1 ? '' : 's'} — finish 5A levels for free, but 6-dot mats are a stretch.`
+        : 'Decent fit but no 6-dot catalyst (Speed hits / high-gain priority) — stop at 5A.',
+    );
+  }
+
+  return sellable(tier, 'Weak overall — neither Speed nor priority quality justify further mats.');
+}
+
 export function evaluateSliceMod({
   chars,
   sliceRef,
@@ -1023,6 +1137,16 @@ export function evaluateSliceMod({
         noBuildUse,
       })
     : null;
+  const ladderPlan = buildLadderPlan({
+    tier,
+    finalScore,
+    scoredStats: secondary.scoredStats,
+    secondaries,
+    shape,
+    primary: selectedPrimary,
+    forcedsell,
+    noBuildUse,
+  });
   const matchedCharacters = alignedMatches.map((m) => ({
     name: m.name,
     variant: m.variant,
@@ -1080,6 +1204,7 @@ export function evaluateSliceMod({
     worstCaseNextHit: nextHit.worstCase,
     tier: tier || null,
     tierAction,
+    ladderPlan,
   };
 }
 

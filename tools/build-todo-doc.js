@@ -218,10 +218,10 @@ const rows = [
     'Carried over from prior launch-prep notes. Real ad unit IDs must be wired in before Production rollout; leaving test IDs in a shipped build returns nothing but causes listing review issues if Data Safety mentions ads.',
   ),
   todoRow(
-    'OPEN',
+    'DONE',
     'Slice engine / tier progression',
-    'Update slicing recommendation to walk the tier ladder (E \u2192 D \u2192 C \u2192 B \u2192 A \u2192 6-dot) using the previous roll as signal. Stop early if the rolls trend bad and surface a final verdict: Usable / Sellable / Not sliceable.',
-    'Current engine rates a single current-tier mod. New flow: for each tier step, weigh the roll outcome (which secondary bumped, by how much) to decide whether to continue or cut losses. Example: E\u2192D rolls a non-target stat by minimum \u2192 mark Sellable. Needs: per-tier simulated expected-value model, a stop condition threshold, and 3-state output mapping. Audit src/services/sliceEngine.js and slice screen UI to surface the verdict.',
+    'Walk tier ladder (E \u2192 D \u2192 C \u2192 B \u2192 A \u2192 6E) using actual rolled secondaries as signal. 4-state verdict: Usable / Cap at 5A / Sellable / Not sliceable.',
+    'buildLadderPlan() in sliceEngine.js reads scoredStats + secondaries, gates the pre-5A mat-cost path on priority-hit presence + quality, and gates the 5A\u21926E mat-cost path on Speed evidence or high-SLICE_GAIN priority rolls. SliceScreen renders a ladder verdict card above the Decision card. Cap at 5A is new \u2014 \u201cfinish the free-money climb but skip 6-dot mats.\u201d Archive on next sweep.',
   ),
   todoRow(
     'DONE',
