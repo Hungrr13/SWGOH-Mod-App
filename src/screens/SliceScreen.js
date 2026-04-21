@@ -598,9 +598,37 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
                         <View style={[styles.matchMeterFill, { width: fillWidth, backgroundColor: matchMeta.tone }]} />
                       </View>
                     </View>
-                    {!compact && (
-                      <Text style={styles.charPriorities}>{c.priorities.join(' › ')}</Text>
-                    )}
+                    {(() => {
+                      const aligned = new Set(c.alignedPriorityIndices || []);
+                      const primaryIdx = c.primaryPriorityIndex ?? -1;
+                      const displayPriorities = compact ? c.priorities.slice(0, 3) : c.priorities;
+                      return (
+                        <View style={styles.priorityChipRow}>
+                          {displayPriorities.map((p, pi) => {
+                            const isAligned = aligned.has(pi);
+                            const isPrimaryHit = pi === primaryIdx;
+                            const chipStyle = isAligned
+                              ? styles.priorityChipAligned
+                              : isPrimaryHit
+                                ? styles.priorityChipPrimary
+                                : styles.priorityChipMuted;
+                            const textStyle = isAligned
+                              ? styles.priorityChipTextAligned
+                              : isPrimaryHit
+                                ? styles.priorityChipTextPrimary
+                                : styles.priorityChipTextMuted;
+                            const marker = isAligned ? ' ✓' : isPrimaryHit ? ' ★' : '';
+                            return (
+                              <View key={`${p}-${pi}`} style={[styles.priorityChip, chipStyle]}>
+                                <Text style={[styles.priorityChipText, textStyle]}>
+                                  {`#${pi + 1} ${p}${marker}`}
+                                </Text>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      );
+                    })()}
                   </View>
                 );
               };
@@ -977,6 +1005,34 @@ const createStyles = colors => StyleSheet.create({
     borderRadius: 999,
   },
   charPriorities: { color: '#60a5fa', fontSize: 12 },
+  priorityChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 6,
+  },
+  priorityChip: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  priorityChipAligned: {
+    borderColor: '#34d399',
+    backgroundColor: 'rgba(52,211,153,0.12)',
+  },
+  priorityChipPrimary: {
+    borderColor: '#a78bfa',
+    backgroundColor: 'rgba(167,139,250,0.12)',
+  },
+  priorityChipMuted: {
+    borderColor: '#334155',
+    backgroundColor: 'transparent',
+  },
+  priorityChipText: { fontSize: 11, fontWeight: '600' },
+  priorityChipTextAligned: { color: '#86efac' },
+  priorityChipTextPrimary: { color: '#c4b5fd' },
+  priorityChipTextMuted: { color: '#94a3b8' },
   splitRow: {
     flexDirection: 'row',
     gap: 8,

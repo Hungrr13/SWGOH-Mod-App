@@ -372,6 +372,9 @@ function scoreMatchAgainstEnteredSecondaries(match, secondaries, selectedPrimary
   let secondaryScore = 0;
   let alignedCount = 0;
   let strongAlignedCount = 0;
+  const alignedPriorityIndices = new Set();
+  const alignedStats = [];
+  const offPriorityHits = [];
   for (const stat of entered) {
     const idx = match.priorityList.findIndex((priority) => normalizeFocusStatName(priority) === stat);
     const focus = focusMap[stat];
@@ -379,6 +382,8 @@ function scoreMatchAgainstEnteredSecondaries(match, secondaries, selectedPrimary
     if (idx !== -1) {
       alignedCount += 1;
       secondaryScore += priorityBandPoints(idx);
+      alignedPriorityIndices.add(idx);
+      alignedStats.push({ stat, priorityIndex: idx });
 
       if (focus) {
         secondaryScore += focus.score * 0.35;
@@ -392,7 +397,10 @@ function scoreMatchAgainstEnteredSecondaries(match, secondaries, selectedPrimary
     // well below in-priority band points so background stats can't dominate.
     if (focus && focus.score > 0) {
       secondaryScore += Math.min(focus.score * 0.12, 8);
-      if (focus.score >= 55) strongAlignedCount += 1;
+      if (focus.score >= 55) {
+        strongAlignedCount += 1;
+        offPriorityHits.push(stat);
+      }
     }
   }
 
@@ -400,6 +408,7 @@ function scoreMatchAgainstEnteredSecondaries(match, secondaries, selectedPrimary
   // priority matches that primary is a great fit for the mod — give them the
   // same priority-band credit we give to aligned secondaries.
   let primaryBonus = 0;
+  let primaryPriorityIndex = -1;
   if (selectedPrimary) {
     const normalizedPrimary = normalizeFocusStatName(selectedPrimary);
     const pidx = match.priorityList.findIndex(
@@ -408,6 +417,7 @@ function scoreMatchAgainstEnteredSecondaries(match, secondaries, selectedPrimary
     if (pidx !== -1) {
       primaryBonus = priorityBandPoints(pidx);
       alignedCount += 1;
+      primaryPriorityIndex = pidx;
       if (pidx <= 1) strongAlignedCount += 1;
     }
   }
@@ -417,6 +427,10 @@ function scoreMatchAgainstEnteredSecondaries(match, secondaries, selectedPrimary
     score: (rankFitTier(match.fitTier) * 100) + avgSecondaryScore + primaryBonus,
     alignedCount,
     strongAlignedCount,
+    alignedPriorityIndices,
+    alignedStats,
+    offPriorityHits,
+    primaryPriorityIndex,
   };
 }
 
@@ -847,6 +861,10 @@ export function evaluateSliceMod({
       matchScore: ranking.score,
       alignedCount: ranking.alignedCount,
       strongAlignedCount: ranking.strongAlignedCount,
+      alignedPriorityIndices: ranking.alignedPriorityIndices,
+      alignedStats: ranking.alignedStats,
+      offPriorityHits: ranking.offPriorityHits,
+      primaryPriorityIndex: ranking.primaryPriorityIndex,
     };
   });
 
@@ -921,6 +939,10 @@ export function evaluateSliceMod({
     matchScore: m.matchScore,
     alignedCount: m.alignedCount,
     strongAlignedCount: m.strongAlignedCount,
+    alignedPriorityIndices: Array.from(m.alignedPriorityIndices || []),
+    alignedStats: m.alignedStats || [],
+    offPriorityHits: m.offPriorityHits || [],
+    primaryPriorityIndex: m.primaryPriorityIndex ?? -1,
   }));
 
   const reasonLines = [
