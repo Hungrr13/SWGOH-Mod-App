@@ -494,7 +494,7 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
             {result.matchedCharacters.length > 0 && (() => {
               const topScore = result.matchedCharacters[0]?.matchScore ?? 0;
               const ownedMatches = result.matchedCharacters.filter(c => isOwnedChar(c.name));
-              const renderCharRow = (c, i, { compact = false, showNotOwned = false } = {}) => {
+              const renderCharRow = (c, i, { compact = false } = {}) => {
                 const matchMeta = getMatchPresentation(c.matchScore, topScore, i);
                 const fillWidth = topScore > 0 ? `${Math.max(16, Math.round((c.matchScore / topScore) * 100))}%` : '16%';
                 const owned = isOwnedChar(c.name);
@@ -513,26 +513,42 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
                         </Text>
                       )}
                     </View>
-                    {(() => {
+                    {hasRoster && (() => {
                       const badges = [];
-                      if (showNotOwned && !owned) {
+                      if (!owned) {
                         badges.push(
-                          <View key="not" style={[styles.miniBadge, styles.badgeNotOwned]}>
-                            <Text style={[styles.miniBadgeText, { color: '#fca5a5' }]}>Not in roster</Text>
+                          <View key="own" style={[styles.miniBadge, styles.badgeNotOwned]}>
+                            <Text style={[styles.miniBadgeText, { color: '#fca5a5' }]}>Not unlocked</Text>
                           </View>
                         );
-                      } else if (owned) {
+                      } else {
+                        badges.push(
+                          <View key="own" style={[styles.miniBadge, styles.badgeOwned]}>
+                            <Text style={[styles.miniBadgeText, { color: '#86efac' }]}>In roster</Text>
+                          </View>
+                        );
                         const mods = modStatusFor(c.name);
-                        if (mods?.hasModData) {
-                          if (mods.missingSlots > 0) {
-                            badges.push(
-                              <View key="empty" style={[styles.miniBadge, styles.badgeEmptySlot]}>
-                                <Text style={[styles.miniBadgeText, { color: '#fde047' }]}>
-                                  {`${mods.missingSlots} empty slot${mods.missingSlots === 1 ? '' : 's'}`}
-                                </Text>
-                              </View>
-                            );
-                          }
+                        if (!mods?.hasModData) {
+                          badges.push(
+                            <View key="mod" style={[styles.miniBadge, styles.badgeUnknown]}>
+                              <Text style={[styles.miniBadgeText, { color: '#cbd5e1' }]}>Mods: unknown</Text>
+                            </View>
+                          );
+                        } else {
+                          const filled = 6 - (mods.missingSlots || 0);
+                          const fullyModded = mods.missingSlots === 0;
+                          badges.push(
+                            <View
+                              key="mod"
+                              style={[styles.miniBadge, fullyModded ? styles.badgeOwned : styles.badgeEmptySlot]}
+                            >
+                              <Text
+                                style={[styles.miniBadgeText, { color: fullyModded ? '#86efac' : '#fde047' }]}
+                              >
+                                {`${filled}/6 mods`}
+                              </Text>
+                            </View>
+                          );
                           if (mods.upgradeable > 0) {
                             badges.push(
                               <View key="up" style={[styles.miniBadge, styles.badgeUpgrade]}>
@@ -565,8 +581,6 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
               };
 
               if (showYours) {
-                const yoursVisible = charsExpanded ? ownedMatches : ownedMatches.slice(0, 3);
-                const bestVisible = charsExpanded ? result.matchedCharacters : result.matchedCharacters.slice(0, 3);
                 return (
                   <View style={styles.splitRow}>
                     <View style={[styles.card, styles.splitCard]}>
@@ -580,11 +594,11 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
                         </Text>
                         <Text style={styles.chevron}>{charsExpanded ? '▲' : '▼'}</Text>
                       </TouchableOpacity>
-                      {ownedMatches.length === 0 ? (
+                      {charsExpanded && (ownedMatches.length === 0 ? (
                         <Text style={styles.emptyHint}>No owned characters match this mod.</Text>
                       ) : (
-                        yoursVisible.map((c, i) => renderCharRow(c, result.matchedCharacters.indexOf(c), { compact: true }))
-                      )}
+                        ownedMatches.map((c) => renderCharRow(c, result.matchedCharacters.indexOf(c), { compact: true }))
+                      ))}
                     </View>
                     <View style={[styles.card, styles.splitCard]}>
                       <TouchableOpacity
@@ -597,7 +611,7 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
                         </Text>
                         <Text style={styles.chevron}>{charsExpanded ? '▲' : '▼'}</Text>
                       </TouchableOpacity>
-                      {bestVisible.map((c, i) => renderCharRow(c, i, { compact: true, showNotOwned: true }))}
+                      {charsExpanded && result.matchedCharacters.map((c, i) => renderCharRow(c, i, { compact: true }))}
                     </View>
                   </View>
                 );
@@ -615,9 +629,7 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
                     </Text>
                     <Text style={styles.chevron}>{charsExpanded ? '▲' : '▼'}</Text>
                   </TouchableOpacity>
-                  {charsExpanded && result.matchedCharacters.map((c, i) =>
-                    renderCharRow(c, i, { showNotOwned: hasRoster })
-                  )}
+                  {charsExpanded && result.matchedCharacters.map((c, i) => renderCharRow(c, i))}
                 </View>
               );
             })()}
@@ -960,8 +972,10 @@ const createStyles = colors => StyleSheet.create({
   },
   miniBadgeText: { fontSize: 10, fontWeight: '700' },
   badgeNotOwned: { borderColor: '#f87171', backgroundColor: '#2a1116' },
+  badgeOwned: { borderColor: '#4ade80', backgroundColor: '#11251a' },
   badgeEmptySlot: { borderColor: '#facc15', backgroundColor: '#2a2410' },
   badgeUpgrade: { borderColor: '#60a5fa', backgroundColor: '#122c3f' },
+  badgeUnknown: { borderColor: '#64748b', backgroundColor: '#1e293b' },
   emptyHint: { color: colors.soft, fontSize: 12, fontStyle: 'italic', paddingVertical: 4 },
   // ── Stat quality ──
   statQualityRow: {
