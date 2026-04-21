@@ -111,6 +111,19 @@ This is the current repo map after the cleanup pass. If you are not sure where t
 
 ## Recent changes (April 2026)
 
+### Priority alignment visible on match rows
+- `scoreMatchAgainstEnteredSecondaries` in `sliceEngine.js` now also returns `alignedPriorityIndices`, `alignedStats`, `offPriorityHits`, and `primaryPriorityIndex`. Threaded through `rankedMatches` → `alignedMatches` → `matchedCharacters` so the UI can render without re-running matching.
+- `SliceScreen.js` replaces the flat `Speed › Offense% › Crit Chance%` text on each match row with colored chips: green ✓ for an entered secondary that hit that priority slot, purple ★ for a primary-stat hit, muted for unhit slots. Shown in compact mode (Your Roster / Best Fit) too, limited to top-3 chips.
+- `Main build` / `Alt build` label now renders on every match row (previously hidden in compact). Overlay `charLine` tags alternate-build entries with `(alt)` so `Gamorrean Guard (alt)` is distinguishable from the Speed-first main build.
+
+### Alt build priorities derived from research + no-Speed penalty
+- `sliceEngine.js` `deriveAltPrioritiesFromFocus(char)` builds alt priority lists at runtime from `SEC_FOCUS` usage data instead of reading the manually-curated `buSecs`. Strategy: keep positions `#1` and `#2` from `char.secs`, then append positions `#5` and `#6` from the full usage-sorted list (skipping anything already in main). Speed is locked — if the main build has Speed at position `N`, the alt keeps Speed at `N`. Characters whose research shows Speed outside the top-6 (naturally slow) are respected; Speed is not force-injected. Falls back to `char.buSecs` if `SEC_FOCUS` lacks the character.
+- `finalScore` takes a `-12` penalty when the mod has `3+` revealed secondaries and none is Speed. A new reason line (`No Speed secondary – almost every character wants Speed first.`) surfaces alongside. Soft penalty (not auto-SELL) so a legit tank / slow-character mod can still rank well if the shell matches.
+
+### Free-user overlay characters panel gated + top expanded to 20
+- `App.js` overlay event handler now checks `premiumState.hasFeature(ROSTER) || isPremium` and swaps `dual.characters` for a `Top Characters — Premium` pitch when the user is free. Free users shouldn't see a top-N list because there's no roster context to meaningfully rank against.
+- `overlayRecommendation.js` `topMatches` cap bumped from `slice(0, 6)` to `slice(0, 20)` and the title from `Top 6 Users` to `Top 20 Users`. With ~330 SWGOH characters, six was too tight to show real alternates.
+
 ### GAC meta tab (premium)
 - New `GAC` tab (`src/screens/GacScreen.js`) wired in `App.js`. Gated behind premium or the `GAC_META` 24 h rewarded unlock; unlocked users get 3v3 / 5v5 + defense / offense toggles, locked users see the gate card.
 - Data flows through `gacMetaService` → `gacMetaState` → screen. `recommendSquads` filters to ≥60 % roster coverage and ranks by `winRate*0.7 + coverage*0.3`.
@@ -274,6 +287,8 @@ This is the current repo map after the cleanup pass. If you are not sure where t
 
 ## Follow-ups / TODO
 
+- **Scanner dismiss on app resume:** after a scan, the overlay stays live when the user swaps back to the app. The Slice tab can't be reviewed without manually killing the overlay first. Should auto-close on app foreground so the Slice breakdown is immediately visible.
+- **Stat-comparative slot badges:** the slot-aware badges (`Empty Circle` / `Upgrade Circle` / `Circle maxed`) are structural only — `Circle maxed` means `6-dot/15/A`, not "equipped mod has better stats than the scanned one." Next: feed both mods into the slice engine and surface a real verdict (e.g. `Upgrade Circle — +8 speed`). Requires passing the equipped mod's secondaries from `rosterService` into the comparison, not just level/tier/pips.
 - **Circle back:** the `Best Mods for <Name>_files/` subfolders under `references/mod-source-html/` still contain SWGOH.GG's minified webpack bundles (`apps-*.js`, etc.). The filenames themselves are generic, but their *contents* reference `swgohgg`. The parsers (`extract-ability-text.js`, `import-secondary-focus-from-html.js`, `merge-tags-from-html.js`) only read the top-level `.htm` files and never touch these `_files/` subfolders. Options: delete the `_files/` subfolders wholesale (safe — repo will shrink meaningfully), or leave them. Decide next session.
 
 ### Git / build notes
