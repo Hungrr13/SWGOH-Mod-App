@@ -111,6 +111,14 @@ This is the current repo map after the cleanup pass. If you are not sure where t
 
 ## Recent changes (April 2026)
 
+### Slice engine: step-by-step ladder + tier OCR on scans
+- `buildLadderPlan()` now emits a new **`SLICE_NEXT`** verdict (cyan) for pre-5A mods with catalyst potential. Instead of projecting an end-state verdict from current rolls, the engine recommends "slice one tier forward, re-evaluate after the new roll" — which matches how slicing actually works (each tier slice adds one random roll to one secondary, chosen across the 4 revealed slots). A 5C mod with Speed at 1 roll + priority stats shows `Slice to 5B` → "Speed already rolling — the 5C→5B slice has a ~25% shot at boosting it again. Take one step, then re-check. Don't pay further mats if the next roll lands elsewhere."
+- Gate: `hasCatalystPotential = speedMayBoost || priorityMayBoost`. `speedMayBoost` = Speed secondary present and rolls < 5. `priorityMayBoost` = at least one priority stat with `SLICE_GAIN >= 0.3` (Offense%, Defense%, Health%, Protection%, Potency%, Tenacity%, or Defense flat). Pre-5A + `matsAhead` + catalyst potential → `SLICE_NEXT`. Otherwise falls through to the existing Filler / Sellable / Cap-at-5A paths.
+- Firing order preserved: `forcedsell` (3+ flat) → obvious-trash sellable → definitive-usable (Speed arrow, hard Speed, strong upside, Speed-backed) → **NEW `SLICE_NEXT`** → 5A `Cap at 5A` / sellable → pre-5A filler / sellable. This means clear-cut cases still get end-state verdicts; only ambiguous pre-5A mods get the step-by-step framing.
+- UI: `SliceScreen.js` renders `SLICE_NEXT` with "Next step: → {nextTier} — re-evaluate after roll" instead of the old "Stop at: X" phrasing.
+- Tier OCR: `extractModTier(text, lines)` in `modCaptureParser.js` pulls the `E/D/C/B/A` letter from the mod-card OCR (patterns: `Tier C`, `LVL 15 · C`, `Level 15 A`, plus a standalone-letter fallback that requires a nearby `LVL|LEVEL` token). Emits `parsed.modTier = '5C'` etc. Threaded through `App.js` → `slicePrefill.tier` → `SliceScreen` so the tier pill auto-selects from the scan. `6E` isn't extracted yet (needs pip-count detection) — user taps 6E manually on a 6-dot mod.
+- Fallback: if OCR doesn't find a tier letter, `SliceScreen` now clears `tier` to `''` on prefill instead of leaving the previous/initial `'5A'`. Ladder plan falls through to `Not sliceable — No tier selected`, prompting the user to pick manually. Prior behaviour silently displayed wrong 5A verdicts on every scan.
+
 ### Slice engine: community-tuned weights + thresholds
 - Audited `sliceRules.js` weights and `buildLadderPlan` thresholds against the community consensus (swgoh.gg top-1000 Kyber GAC meta, Grandivory `characterSettings.js`, Crouching-Rancor efficiency formula, and YouTube guidance from Warrior / MobileGamer / Ahnaldt101).
 - Weight change: `Defense%` dropped from `5.0` → `4.0`. Community consensus is ~3–4; our previous 5.0 was biasing tank mods ~25% above consensus.

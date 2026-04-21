@@ -976,6 +976,19 @@ function buildLadderPlan({
     desc: reason,
     stopAt: '6E',
   });
+  const sliceNext = (nextTier, reason) => ({
+    verdict: 'SLICE_NEXT',
+    label: `Slice to ${nextTier}`,
+    color: '#22d3ee',
+    desc: reason,
+    stopAt: nextTier,
+  });
+
+  const TIER_ORDER = ['5E', '5D', '5C', '5B', '5A'];
+  const currentIdx = TIER_ORDER.indexOf(tier);
+  const nextTier = currentIdx >= 0 && currentIdx < TIER_ORDER.length - 1
+    ? TIER_ORDER[currentIdx + 1]
+    : null;
 
   if (noBuildUse) return notSliceable('No character build uses this shell.');
   if (!tier || !MOD_TIERS.includes(tier)) return notSliceable('No tier selected — choose the mod tier to project the slice path.');
@@ -1025,6 +1038,34 @@ function buildLadderPlan({
     return usable(`${top.name} rolling at ${Math.round(top.qualityPct)}% quality — 6-dot multiplies the cap.`);
   }
   if (speedBacked) return usable(`Speed at ${speedSec.val} (${speedSec.rolls} rolls) with solid overall quality — worth 6-dot.`);
+
+  // Step-by-step ladder: pre-5A mods aren't end-state decisions. Each tier
+  // slice adds one random roll to an existing secondary, so a mod with
+  // catalyst potential (Speed already rolling, or a priority stat that
+  // benefits from 6-dot) deserves a "slice one tier, re-check" verdict
+  // rather than a projection from current rolls. Community guidance: walk
+  // the ladder a step at a time — only sell when the upside is genuinely
+  // dead, not when current rolls merely haven't arrived yet.
+  const speedMayBoost = speedSec && parseInt(speedSec.rolls, 10) < 5;
+  const priorityMayBoost = priorityStats.some(
+    (s) => (SLICE_GAIN[s.name] ?? 0) >= 0.3,
+  );
+  const hasCatalystPotential = speedMayBoost || priorityMayBoost;
+
+  if (matsAhead && nextTier && hasCatalystPotential) {
+    if (speedMayBoost) {
+      const rollWord = parseInt(speedSec.rolls, 10) === 1 ? 'roll' : 'rolls';
+      return sliceNext(
+        nextTier,
+        `Speed already rolling (${speedSec.rolls} ${rollWord} at ${speedSec.val}) — the ${tier}→${nextTier} slice has a ~25% shot at boosting it again. Take one step, then re-check. Don't pay further mats if the next roll lands elsewhere.`,
+      );
+    }
+    const topPriority = priorityStats.find((s) => (SLICE_GAIN[s.name] ?? 0) >= 0.3);
+    return sliceNext(
+      nextTier,
+      `${topPriority.name} on-board — the ${tier}→${nextTier} slice could upgrade it. Take one step, then re-check. Sell if the next roll lands on a dead stat.`,
+    );
+  }
 
   // Cap at 5A: only fires when the mod is ALREADY at 5A. Leveling 5A 1→15 is
   // money-only (reveals hidden rolls), so "stop at 5A" is a meaningful resting

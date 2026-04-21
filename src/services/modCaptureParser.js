@@ -546,6 +546,7 @@ function buildAnalysisResult({
   const parsedShape = chooseShape(detectedShape || ocrShape, inferredShape, detectedPrimary, topShapeMatches);
   const secondaries = extractSecondaries(normalizedLines, detectedPrimary, fullText);
   const modLevel = extractModLevel(fullText);
+  const modTier = extractModTier(fullText, normalizedLines);
   const summary = summarizeParserState({
     modSet: parsedSet,
     modShape: parsedShape,
@@ -571,8 +572,42 @@ function buildAnalysisResult({
       primary: detectedPrimary,
       secondaries,
       modLevel,
+      modTier,
     },
   };
+}
+
+// In-game the tier letter (E/D/C/B/A) shows near the bottom of the mod card,
+// often alongside the level banner ("LVL 15 · C", "Level 15 A") or as a
+// standalone letter on its own line. OCR output is messy so we try a few
+// patterns, from most specific to least, and only accept a confident hit.
+// Returns '5E'..'5A' or null. 6E needs pip-count context we don't extract yet,
+// so this always maps to the 5-dot tier — user can tap 6E manually on a
+// 6-dot mod.
+function extractModTier(text, lines) {
+  if (!text) return null;
+  const patterns = [
+    /\btier\s*([A-E])\b/i,
+    /\blvl?\s*\.?\s*\d{1,2}\s*[-·:.\s]\s*([A-E])\b/i,
+    /\blevel\s*\d{1,2}\s*[-·:.\s]\s*([A-E])\b/i,
+  ];
+  for (const p of patterns) {
+    const m = text.match(p);
+    if (m) return `5${m[1].toUpperCase()}`;
+  }
+  // Fallback: a standalone A/B/C/D/E line near the level banner.
+  if (Array.isArray(lines)) {
+    for (let i = 0; i < lines.length; i += 1) {
+      const line = (lines[i] || '').trim();
+      if (/^[A-E]$/i.test(line)) {
+        const nearby = (lines.slice(Math.max(0, i - 2), i + 3) || []).join(' ');
+        if (/\b(?:level|lvl|l[vil]{1,2})\b/i.test(nearby)) {
+          return `5${line.toUpperCase()}`;
+        }
+      }
+    }
+  }
+  return null;
 }
 
 // OCR often renders the mod-level banner as "LEVEL 15", "Level 15", or

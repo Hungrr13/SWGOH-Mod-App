@@ -253,6 +253,13 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
     setPrimary(nextPrimary || NONE);
     setModSet(overlayPrefill.modSet || NONE);
     setSecs(nextSecs);
+    // Use the OCR'd tier when the parser found one; otherwise clear so the
+    // user picks. Defaulting to the previous/initial '5A' produced wrong
+    // verdicts (e.g. a blue 5C scan reading as 5A).
+    const incomingTier = overlayPrefill.tier && MOD_TIERS.includes(overlayPrefill.tier)
+      ? overlayPrefill.tier
+      : '';
+    setTier(incomingTier);
     setCharsExpanded(false);
 
     onOverlayPrefillConsumed?.();
@@ -460,7 +467,9 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
                       ? 'Slice path: current → 6E'
                       : result.ladderPlan.verdict === 'CAP_AT_5A'
                         ? 'Slice path: current → 5A (skip 6-dot)'
-                        : `Stop at: ${result.ladderPlan.stopAt}`}
+                        : result.ladderPlan.verdict === 'SLICE_NEXT'
+                          ? `Next step: → ${result.ladderPlan.stopAt} — re-evaluate after roll`
+                          : `Stop at: ${result.ladderPlan.stopAt}`}
                   </Text>
                 )}
                 <Text style={styles.verdictMeaning}>{result.ladderPlan.desc}</Text>

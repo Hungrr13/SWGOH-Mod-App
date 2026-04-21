@@ -502,6 +502,7 @@ function AppShell() {
             primary: analysis.parsed.primary && analysis.parsed.primary !== 'Not found' ? analysis.parsed.primary : '',
             modSet: analysis.parsed.modSet && analysis.parsed.modSet !== 'Not found' ? analysis.parsed.modSet : '',
             secondaries: prefillSecs,
+            tier: analysis.parsed.modTier || '',
           });
         }
         const needsReview = dual.slice.title === 'Capture Needs Review';

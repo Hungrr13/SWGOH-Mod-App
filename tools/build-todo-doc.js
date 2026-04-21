@@ -220,8 +220,20 @@ const rows = [
   todoRow(
     'DONE',
     'Slice engine / tier progression',
-    'Walk tier ladder (E \u2192 D \u2192 C \u2192 B \u2192 A \u2192 6E) using actual rolled secondaries as signal. 5-state verdict: Usable / Cap at 5A / Filler / Sellable / Not sliceable.',
-    'buildLadderPlan() in sliceEngine.js reads scoredStats + secondaries, gates the pre-5A mat-cost path on priority-hit presence + quality, and gates the 5A\u21926E mat-cost path on Speed evidence or high-SLICE_GAIN priority rolls. SliceScreen renders a ladder verdict card above the Decision card. Cap at 5A is scoped to mods already at 5A so sub-5A mods aren\u2019t pushed to burn mats. Filler (blue) covers \u201cdecent stats but no 6-dot catalyst \u2014 equip as-is until replaced.\u201d Archive on next sweep.',
+    'Walk tier ladder (E \u2192 D \u2192 C \u2192 B \u2192 A \u2192 6E) using actual rolled secondaries as signal. 6-state verdict: Usable / Slice to next tier / Cap at 5A / Filler / Sellable / Not sliceable.',
+    'buildLadderPlan() in sliceEngine.js emits per-step verdicts. Pre-5A mods with catalyst potential (Speed secondary with rolls<5, or priority stat with SLICE_GAIN\u22650.3) now return SLICE_NEXT (cyan) \u2014 \u201ctake one step, re-evaluate after the roll\u201d \u2014 instead of projecting an end-state from current rolls. Definite-Usable paths (Speed arrow, hard Speed, strongUpside, speedBacked) still return USABLE. Cap at 5A is scoped to mods already at 5A. SliceScreen renders SLICE_NEXT as \u201cNext step: \u2192 {nextTier} \u2014 re-evaluate after roll\u201d. Archive on next sweep.',
+  ),
+  todoRow(
+    'DONE',
+    'Slice engine / tier OCR on scans',
+    'Scanner auto-populates the slice-tab tier pill from the mod card (E/D/C/B/A letter near the level banner)',
+    'extractModTier() in modCaptureParser.js reads Tier/LVL/Level patterns from the OCR output and returns \u20185E\u2019\u2026\u20185A\u2019. Threaded through parsed.modTier \u2192 App.js slicePrefill.tier \u2192 SliceScreen. 6E (6-dot) isn\u2019t auto-detected yet (needs pip-count detection) \u2014 user taps 6E manually. When OCR misses the letter, SliceScreen clears tier to \u2018\u2019 on prefill so the ladder plan falls through to \u201cNot sliceable \u2014 No tier selected\u201d rather than silently showing wrong 5A verdicts.',
+  ),
+  todoRow(
+    'OPEN',
+    'Scanner / native tier-color detection',
+    'Detect mod tier from frame color in the native classifier (E=gray, D=green, C=blue, B=purple, A=gold) + detect 6-dot vs 5-dot from pips',
+    'Complement to the OCR-based tier extractor. Native pixel sampling on the mod frame would be more reliable than OCR and would unlock 6E detection. Add to ModIconClassifier.kt, wire through ModOverlayCaptureService.kt \u2192 JS bridge \u2192 parsed.modTier fallback.',
   ),
   todoRow(
     'DONE',
