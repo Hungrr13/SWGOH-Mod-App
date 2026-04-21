@@ -258,7 +258,7 @@ export function buildOverlayRecommendations(parsed, options = {}) {
     secondaries,
   });
 
-  const topMatches = result.matchedCharacters.slice(0, 6);
+  const topMatches = result.matchedCharacters.slice(0, 20);
   const noUsers = topMatches.length === 0;
   const hasHidden = hiddenEntries.length > 0;
   const visibleWithRollsDual = (parsed.secondaries || [])
@@ -296,7 +296,7 @@ export function buildOverlayRecommendations(parsed, options = {}) {
     ? topMatches.map((m, i) => charLine(m, i, { modStatusFor: options.modStatusFor })).join('\n')
     : 'Sell — no users.';
   const charTitle = topMatches.length
-    ? `Top ${Math.min(topMatches.length, 6)} Users`
+    ? `Top ${Math.min(topMatches.length, 20)} Users`
     : 'SELL';
 
   return {

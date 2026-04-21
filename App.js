@@ -512,12 +512,26 @@ function AppShell() {
               rawPreview ? `Read: ${rawPreview}` : null,
             ].filter(Boolean).join('\n')
           : dual.slice.body;
+        // Character recommendations are a premium feature — gated behind the
+        // same ROSTER unlock (ad-reward or premium). Free users haven't linked
+        // a roster, so we can't meaningfully score mods against their owned
+        // characters and the top-6 list would be misleading — show a pitch
+        // on the characters panel instead.
+        const premiumNow = premiumState.getSnapshot();
+        const rosterUnlocked = premiumNow.isPremium
+          || premiumState.hasFeature(premiumState.FEATURES.ROSTER);
+        const charactersPanel = rosterUnlocked
+          ? dual.characters
+          : {
+              title: 'Top Characters — Premium',
+              body: 'Unlock Premium or watch an ad in the app to see the best characters for this mod, filtered to your roster.',
+            };
         console.log('[overlay] calling showDualOverlayRecommendation title=' + dual.slice.title);
         await overlayCapture.showDualOverlayRecommendation(
           dual.slice.title,
           sliceBody,
-          dual.characters.title,
-          dual.characters.body,
+          charactersPanel.title,
+          charactersPanel.body,
         );
         console.log('[overlay] showDualOverlayRecommendation done');
         } catch (err) {
