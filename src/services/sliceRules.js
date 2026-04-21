@@ -6,7 +6,7 @@ export const SLICE_RULES = {
     "Protection%": 8.0,
     "Tenacity%": 7.5,
     "Potency%": 7.5,
-    "Defense%": 5.0,
+    "Defense%": 4.0,
     "Crit Chance%": 4.5,
     // Flat stats: much weaker than % equivalents — scored low so % always wins
     Offense: 2.0,

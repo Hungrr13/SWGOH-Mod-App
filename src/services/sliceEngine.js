@@ -992,7 +992,7 @@ function buildLadderPlan({
     ? priorityStats.reduce((a, s) => a + s.qualityPct, 0) / priorityCount
     : 0;
   const strongUpside = priorityStats.some(
-    (s) => (SLICE_GAIN[s.name] ?? 0) >= 0.5 && s.qualityPct >= 65,
+    (s) => (SLICE_GAIN[s.name] ?? 0) >= 0.3 && s.qualityPct >= 65,
   );
   const speedArrow = shape === 'Arrow' && primary === 'Speed';
   const matsAhead = tier !== '5A';
@@ -1021,7 +1021,7 @@ function buildLadderPlan({
   if (speedArrow && speedSec) return usable('Speed arrow with Speed secondary — always worth 6-dot.');
   if (speedHitHard) return usable(`Speed hit ${speedSec.rolls} rolls at value ${speedSec.val} — 6-dot slice is a strong bet.`);
   if (strongUpside) {
-    const top = priorityStats.find((s) => (SLICE_GAIN[s.name] ?? 0) >= 0.5 && s.qualityPct >= 65);
+    const top = priorityStats.find((s) => (SLICE_GAIN[s.name] ?? 0) >= 0.3 && s.qualityPct >= 65);
     return usable(`${top.name} rolling at ${Math.round(top.qualityPct)}% quality — 6-dot multiplies the cap.`);
   }
   if (speedBacked) return usable(`Speed at ${speedSec.val} (${speedSec.rolls} rolls) with solid overall quality — worth 6-dot.`);
@@ -1031,7 +1031,7 @@ function buildLadderPlan({
   // place. At 5B/5C/5D/5E, reaching 5A still costs tier mats — if we've ruled
   // out 6-dot we should NOT burn mats chasing 5A. Decent stats at a lower
   // tier become Filler (equip as-is until replaced), weak stats are Sellable.
-  const hasDecentFit = finalScore >= 40 || priorityCount >= 2;
+  const hasDecentFit = finalScore >= 50 || priorityCount >= 2;
 
   if (tier === '5A') {
     if (hasDecentFit) {
