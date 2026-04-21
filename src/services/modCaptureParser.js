@@ -416,14 +416,19 @@ function extractSecondaries(lines, primary, fullText = '') {
       if (!stat || !value || seen.has(stat)) return;
       if (stat.toLowerCase() === primaryKey) return;
 
+      // Prefer the entry that carries an explicit roll count — the three
+      // patterns above can all match the same line, and valueFirstPattern
+      // fires without rolls. Without this preference we'd drop the "(2)"
+      // OCR'd from the card and force estimateRolls to guess later.
+      const withRolls = lineMatches.find(
+        item => item.stat === stat && Number.isFinite(item.rolls),
+      );
       seen.add(stat);
       found.push({
         stat,
         value,
         raw: line,
-        rolls: Number.isFinite(lineMatches.find(item => item.stat === stat)?.rolls)
-          ? lineMatches.find(item => item.stat === stat)?.rolls
-          : undefined,
+        rolls: withRolls ? withRolls.rolls : undefined,
       });
     });
   });
@@ -577,34 +582,53 @@ function buildAnalysisResult({
   };
 }
 
-// In-game the tier letter (E/D/C/B/A) shows near the bottom of the mod card,
-// often alongside the level banner ("LVL 15 · C", "Level 15 A") or as a
-// standalone letter on its own line. OCR output is messy so we try a few
-// patterns, from most specific to least, and only accept a confident hit.
-// Returns '5E'..'5A' or null. 6E needs pip-count context we don't extract yet,
-// so this always maps to the 5-dot tier — user can tap 6E manually on a
-// 6-dot mod.
+// In-game the tier letter (E/D/C/B/A) shows next to the mod icon as a
+// compact "15 - A" or "15 A" badge (no LVL/LEVEL prefix), and also in
+// some layouts alongside a LVL banner ("LVL 15 · C"). OCR output is noisy
+// so we try specific patterns first and fall back to per-line matching.
+// Returns '5E'..'5A' or null. 6E needs pip-count context we don't extract
+// yet, so this always maps to the 5-dot tier — user taps 6E manually.
 function extractModTier(text, lines) {
   if (!text) return null;
-  const patterns = [
-    /\btier\s*([A-E])\b/i,
-    /\blvl?\s*\.?\s*\d{1,2}\s*[-·:.\s]\s*([A-E])\b/i,
-    /\blevel\s*\d{1,2}\s*[-·:.\s]\s*([A-E])\b/i,
-  ];
-  for (const p of patterns) {
-    const m = text.match(p);
-    if (m) return `5${m[1].toUpperCase()}`;
+  // Explicit "Tier X" label
+  const tierTag = text.match(/\btier\s*([A-E])\b/i);
+  if (tierTag) return `5${tierTag[1].toUpperCase()}`;
+  // "LVL 15 - C" / "Level 15 A" — level banner with letter
+  const lvlMatch = text.match(
+    /\b(?:level|lvl|l[vil]{1,2})\s*\.?\s*(\d{1,2})\s*[-–—·:.\s]+\s*([A-E])\b/i,
+  );
+  if (lvlMatch) {
+    const n = Number(lvlMatch[1]);
+    if (n >= 1 && n <= 15) return `5${lvlMatch[2].toUpperCase()}`;
   }
-  // Fallback: a standalone A/B/C/D/E line near the level banner.
+  // Compact "15 - A" / "15-A" / "15A" badge. This is the common layout next
+  // to the mod icon, where the level and tier appear together without any
+  // "LVL" prefix. Require the digit to be 1-15 (mod level range) to avoid
+  // false matches on roll counts or stat values elsewhere in the text.
   if (Array.isArray(lines)) {
-    for (let i = 0; i < lines.length; i += 1) {
-      const line = (lines[i] || '').trim();
-      if (/^[A-E]$/i.test(line)) {
-        const nearby = (lines.slice(Math.max(0, i - 2), i + 3) || []).join(' ');
-        if (/\b(?:level|lvl|l[vil]{1,2})\b/i.test(nearby)) {
-          return `5${line.toUpperCase()}`;
-        }
+    for (const rawLine of lines) {
+      const line = String(rawLine || '').trim();
+      const badge = line.match(/^\(?(\d{1,2})\s*[-–—]?\s*([A-E])\)?$/i);
+      if (badge) {
+        const n = Number(badge[1]);
+        if (n >= 1 && n <= 15) return `5${badge[2].toUpperCase()}`;
       }
+    }
+  }
+  // Fallback: scan the full text for a short "<1-15> - <A-E>" run.
+  const dashMatch = text.match(/(?:^|\s|\n)(\d{1,2})\s*[-–—]\s*([A-E])(?=\s|$|\n)/);
+  if (dashMatch) {
+    const n = Number(dashMatch[1]);
+    if (n >= 1 && n <= 15) return `5${dashMatch[2].toUpperCase()}`;
+  }
+  // Last resort: OCR sometimes glues the tier letter to the front of the
+  // first secondary line, e.g. "C (2) 4.12% Protection". Look for a single
+  // A-E letter followed by a "(n)" roll-count on any line.
+  if (Array.isArray(lines)) {
+    for (const rawLine of lines) {
+      const line = String(rawLine || '').trim();
+      const stuck = line.match(/^([A-E])\s+\(\d+\)/);
+      if (stuck) return `5${stuck[1].toUpperCase()}`;
     }
   }
   return null;

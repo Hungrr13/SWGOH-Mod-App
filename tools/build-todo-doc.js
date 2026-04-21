@@ -230,6 +230,12 @@ const rows = [
     'extractModTier() in modCaptureParser.js reads Tier/LVL/Level patterns from the OCR output and returns \u20185E\u2019\u2026\u20185A\u2019. Threaded through parsed.modTier \u2192 App.js slicePrefill.tier \u2192 SliceScreen. 6E (6-dot) isn\u2019t auto-detected yet (needs pip-count detection) \u2014 user taps 6E manually. When OCR misses the letter, SliceScreen clears tier to \u2018\u2019 on prefill so the ladder plan falls through to \u201cNot sliceable \u2014 No tier selected\u201d rather than silently showing wrong 5A verdicts.',
   ),
   todoRow(
+    'DONE',
+    'Scanner / parser fixes',
+    'Parser: tier letter detection + secondary roll-count preservation fixes on OCR output',
+    'extractModTier() now catches the tier when OCR glues the letter onto the first secondary line (e.g. \u201cC (2) 4.12% Protection\u201d) via a new ^([A-E])\\s+\\(\\d+\\) pattern, in addition to \u201cLVL 15 \u00b7 C\u201d / \u201c15 - A\u201d badge patterns. Second fix: extractSecondaries() was dropping the (n) roll counts because valueFirstPattern dedup-won over rollFirstPattern; now prefers the entry that carries an explicit rolls field so Protection% (2), Offense% (2), Speed (1), Defense (1) survive end-to-end. Verified on R5CX10W4LJY scan (ocr-debug-last.txt: 5C Cross).',
+  ),
+  todoRow(
     'OPEN',
     'Scanner / native tier-color detection',
     'Detect mod tier from frame color in the native classifier (E=gray, D=green, C=blue, B=purple, A=gold) + detect 6-dot vs 5-dot from pips',
