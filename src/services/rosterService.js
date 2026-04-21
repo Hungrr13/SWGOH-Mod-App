@@ -207,11 +207,21 @@ export function modSummary(rosterPayload, baseId, shape) {
   if (!unit) return null;
   const mods = Array.isArray(unit.mods) ? unit.mods : [];
   if (mods.length === 0) {
-    const base = { missingSlots: null, upgradeable: null, hasModData: false };
+    // Character is in the roster but has no mods equipped (typically low-level
+    // or never modded). Treat every slot as empty — anything you scan is an
+    // upgrade over nothing.
     if (shape) {
-      return { ...base, slotShape: shape, slotMod: null, slotEmpty: null, slotUpgradeable: null };
+      return {
+        missingSlots: 6,
+        upgradeable: 0,
+        hasModData: true,
+        slotShape: shape,
+        slotMod: null,
+        slotEmpty: true,
+        slotUpgradeable: false,
+      };
     }
-    return base;
+    return { missingSlots: 6, upgradeable: 0, hasModData: true };
   }
   const filledShapes = new Set(mods.map(m => m.slot).filter(Boolean));
   const missingSlots = 6 - filledShapes.size;
