@@ -468,6 +468,21 @@ class ModIconClassifier(private val context: Context) {
         val debug = candidate.ruleDebug ?: return@any false
         debug.squareLooksExplicit && (debug.scores["Square"] ?: 0.0) >= 0.75
       }
+    // A Diamond with a central set icon can fool mask-only into tracing a
+    // near-round silhouette (circularity 0.86, stronglyRound true) and win
+    // Circle ~0.97. The observed top-level geometry still flags strong
+    // diamondCornerScore (~0.92), but so does a real Grievous-portrait
+    // Circle — so dCorner alone can't discriminate. The `outer` contour
+    // candidate (which traces the rim edge directly) is the tiebreaker: a
+    // true Circle's outer trace scores Circle high with circularity >= 0.70,
+    // while a Diamond's outer trace sees the corners and scores Circle <=
+    // 0.35 with circularity <= 0.55.
+    val outerDebug = detection.syntheticCandidateDebugs
+      .firstOrNull { it.label == "outer" }?.ruleDebug
+    val outerContourLooksNonRound =
+      outerDebug != null &&
+        (outerDebug.scores["Circle"] ?: 0.0) <= 0.35 &&
+        outerDebug.geometry.circularity <= 0.55
 
     try {
       Log.i("ModShapeDebug", "refineShapeSelection entry: name=${detection.name} smoothedCorners=${metrics.smoothedCornerCount} cornerCount=${metrics.cornerCount} dCorner=${geometry.diamondCornerScore} dDiag=${geometry.diamondDiagonalScore} triScore=${geometry.triangleScore}")
@@ -503,6 +518,20 @@ class ModIconClassifier(private val context: Context) {
         detection.name == "Square" &&
           strongCrossCandidateCount >= 2 ->
           "Cross"
+        // HIGH-PRIORITY CIRCLE -> DIAMOND RESCUE: a rounded Diamond with a
+        // set icon can smooth its mask-only silhouette into a ~0.97 Circle
+        // win with stronglyRound=true, while the observed geometry still
+        // exposes strong diamond-corner evidence. The `outer` contour tracer
+        // is the tiebreaker — it looks at the rim directly and scores Circle
+        // low with circularity ~0.38 when the true shape is a Diamond, but
+        // scores Circle high with circularity ~0.75+ on a real Grievous-
+        // portrait Circle. Fires before the stronglyRound-gated rescues
+        // below so this case isn't blocked.
+        detection.name == "Circle" &&
+          geometry.diamondCornerScore >= 0.88 &&
+          geometry.aspectRatio in 0.92..1.10 &&
+          outerContourLooksNonRound ->
+          "Diamond"
         // HIGH-PRIORITY CIRCLE RESCUE: a true Circle with a central set icon
         // can confuse outer/inner contour analysis into picking Square or
         // Diamond, but the mask-only candidate still sees the clean round
