@@ -522,11 +522,6 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
                           </View>
                         );
                       } else {
-                        badges.push(
-                          <View key="own" style={[styles.miniBadge, styles.badgeOwned]}>
-                            <Text style={[styles.miniBadgeText, { color: '#86efac' }]}>In roster</Text>
-                          </View>
-                        );
                         const mods = modStatusFor(c.name);
                         if (!mods?.hasModData) {
                           badges.push(
