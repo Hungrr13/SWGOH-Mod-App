@@ -111,6 +111,18 @@ This is the current repo map after the cleanup pass. If you are not sure where t
 
 ## Recent changes (April 2026)
 
+### chars.js refreshed from swgoh.gg mod meta report
+- `src/data/chars.js` rewritten against `https://swgoh.gg/stats/mod-meta-report/` — the single-page consensus table that lists recommended sets + per-shape primary for every character. 277 entries had drifted from the current meta (e.g. Aayla cross `Potency` → `Protection/Offense`, Ahsoka Tano set `Offense(x4)+Health(x2)` → `Speed(x4)+Health(x2)`). 47 entries were already correct. 1 character (Cobb Vanth) isn't in the meta table yet and was left as-is. `src/data/chars.js.bak` is the pre-rewrite snapshot.
+- Verifier: `tools/verify-chars-vs-swgoh.js`. Fetches the meta report through our Cloudflare Worker (scrape allow-list now includes `/stats/`), parses each `<tbody>` row (character slug, stacked `stat-mod-set-def-icon--set-<id>` icons, last 4 `<td>`s = Arrow/Triangle/Circle/Cross primaries), and diffs against `chars.js`. Supports multi-primary tolerance lists like `Protection / Tenacity` — a local value is a match if it appears anywhere in the reported list. Run dry: `node tools/verify-chars-vs-swgoh.js`. Apply: `node tools/verify-chars-vs-swgoh.js --apply`.
+- Set decoding rule: each `set-<id>` icon is one active set-bonus instance. 4-piece sets (Speed / Offense / Crit Dmg) contribute 4 mods per icon; 2-piece sets (Health / Defense / Crit Chance / Potency / Tenacity) contribute 2 mods per icon. So `set-4 + set-7` = `Speed(x4) + Tenacity(x2)`; `set-1 + set-1 + set-3` = `Health(x4) + Defense(x2)`.
+
+### Slot-aware mod comparison on the Slice tab
+- `SliceScreen.js` moves the purple priority-star indicator out of the priority chip row and into two dedicated per-character badges below the character name: **Primary stat match** (purple) and **Set match** (yellow, substring-matched against the scanned mod's set). These show regardless of roster state; owned-mod badges (Empty / Better fit / Same fit / Worse fit) render only when a roster is loaded.
+- Verdict model simplified from score-based Upgrade/Sidegrade/Downgrade to a count-based **Better fit / Same fit / Worse fit** that compares the number of priority-aligned secondaries on the scanned mod vs. the currently-equipped slot mod. Magnitude-insensitive — any matching-priority secondary counts as 1, regardless of roll value or tier. New `countAlignedForMatch(match, secondaries)` export in `sliceEngine.js` drives both sides.
+- Priority chips on match rows are now uniformly green when aligned (no purple — the primary-stat match lives in its own badge now).
+- Character recommendations are filtered by the scanned mod's set. When a set is selected, only characters whose `c.set` string includes that set name (substring match, so `Defense` matches both `Defense(x4)+...` and `...+Defense(x2)`) are surfaced in Best Characters / Best Fit.
+- `rosterService.js` cache key bumped `swgoh_roster_v2_` → `swgoh_roster_v3_` to invalidate caches that predate mod `primary` + `secondaries` normalization. Any future shape change to the cached roster needs another bump.
+
 ### Flat / % priority equivalence (% trumps flat)
 - New `promoteToPercent` + `normalizePriorityName` helpers in `sliceEngine.js`. Priority-list matching now treats `Health` (flat) and `Health%` as the same target — a scanned `Health%` satisfies a `Health` priority and vice versa.
 - `deriveAltPrioritiesFromFocus` coalesces flat + % SEC_FOCUS entries before ranking (keeps the higher `usagePct`, always emits the % variant), so derived alt builds no longer leak flat entries from research positions 5–6.

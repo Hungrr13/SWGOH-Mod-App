@@ -1082,3 +1082,132 @@ export function evaluateSliceMod({
     tierAction,
   };
 }
+
+// Convert a rosterService-normalized equipped mod into the {name,val,rolls}
+// secondary shape used by scoreMatchAgainstEnteredSecondaries. rosterService
+// already promotes "Offense" primary/secondary to "Offense%" via display_value
+// inspection, so here we just pass the parsed numeric value through.
+export function equippedModToScannedShape(equippedMod) {
+  if (!equippedMod) return { secondaries: [], primary: null };
+  const secondaries = (equippedMod.secondaries || []).map((s) => ({
+    name: s.name,
+    val: s.parsedValue ?? 0,
+    rolls: s.rolls || 1,
+    hidden: false,
+  }));
+  return { secondaries, primary: equippedMod.primary?.name || null };
+}
+
+// Public wrapper around the internal character-match scorer so callers outside
+// evaluateSliceMod can score an arbitrary mod (scanned or equipped) against a
+// character's priority list. The `match` argument accepts the shape returned
+// by evaluateSliceMod().matchedCharacters: { name, priorities, fitTier }.
+export function scoreModAgainstMatch({ match, secondaries, primary }) {
+  if (!match || !Array.isArray(match.priorities)) return null;
+  return scoreMatchAgainstEnteredSecondaries(
+    { name: match.name, priorityList: match.priorities, fitTier: match.fitTier || "A" },
+    secondaries || [],
+    primary || null
+  );
+}
+
+// Compare a scanned mod against the currently-equipped mod for a specific
+// character+slot. `match` is an element of evaluateSliceMod().matchedCharacters
+// and `equippedMod` is rosterService.normalizeMod's output for that character's
+// current mod in the same shape. Returns null when we don't have enough data
+// to make a comparison (e.g. equipped has no secondaries).
+//
+// Verdict thresholds are intentionally asymmetric: going from a worse to a
+// better mod should be easy to flag (encourages swaps), while going the other
+// way requires a bigger regression before we warn the user. "Sidegrade"
+// catches the wide middle band where the two mods score similarly — swap cost
+// isn't worth it.
+export function compareScannedVsEquipped({
+  match,
+  scannedSecondaries,
+  scannedPrimary,
+  equippedMod,
+}) {
+  if (!match || !equippedMod) return null;
+  if (!Array.isArray(equippedMod.secondaries) || equippedMod.secondaries.length === 0) {
+    return null;
+  }
+
+  const scannedScore = scoreModAgainstMatch({
+    match,
+    secondaries: scannedSecondaries || [],
+    primary: scannedPrimary,
+  });
+  const equippedShape = equippedModToScannedShape(equippedMod);
+  const equippedScore = scoreModAgainstMatch({
+    match,
+    secondaries: equippedShape.secondaries,
+    primary: equippedShape.primary,
+  });
+  if (!scannedScore || !equippedScore) return null;
+
+  const rawDelta = scannedScore.score - equippedScore.score;
+  const scoreDelta = Math.round(rawDelta * 10) / 10;
+
+  let verdict;
+  if (rawDelta > 4) verdict = "Upgrade";
+  else if (rawDelta < -6) verdict = "Downgrade";
+  else verdict = "Sidegrade";
+
+  const statDeltas = computeKeyStatDeltas(
+    scannedSecondaries || [],
+    equippedMod,
+    match.priorities || []
+  );
+
+  return { verdict, scoreDelta, statDeltas, scannedScore, equippedScore };
+}
+
+// Count how many of a mod's secondary stats land on a character's priority list.
+// Flat/percent pairs normalize together so "Offense" flat counts the same as
+// "Offense%" when the priority list calls for either. `secondaries` accepts
+// either scanned shape ({ name, val }) or equipped-mod shape ({ name, parsedValue }).
+export function countAlignedForMatch(match, secondaries) {
+  if (!match || !Array.isArray(match.priorities)) return 0;
+  const priorities = new Set(match.priorities.map(normalizePriorityName));
+  let count = 0;
+  for (const s of secondaries || []) {
+    if (!s) continue;
+    const rawName = s.name || s.stat;
+    if (!rawName) continue;
+    const n = normalizePriorityName(FLAT_TO_PERCENT[rawName] ?? rawName);
+    if (priorities.has(n)) count++;
+  }
+  return count;
+}
+
+// For each priority stat the character cares about, compute the signed value
+// delta between the scanned mod's secondary (or 0 if absent) and the equipped
+// mod's secondary (or 0 if absent). Used to build the badge label like
+// "+8 speed" / "-3 potency".
+function computeKeyStatDeltas(scannedSecs, equippedMod, priorityList) {
+  const equippedByName = new Map();
+  for (const s of equippedMod.secondaries || []) {
+    equippedByName.set(s.name, s.parsedValue || 0);
+  }
+  const scannedByName = new Map();
+  for (const s of scannedSecs) {
+    if (!s || !s.name || s.val === "" || s.val == null) continue;
+    const v = parseFloat(s.val);
+    if (!Number.isFinite(v)) continue;
+    const name = FLAT_TO_PERCENT[s.name] ?? s.name;
+    scannedByName.set(name, v);
+  }
+  const seen = new Set();
+  const deltas = [];
+  for (const raw of priorityList) {
+    const stat = normalizePriorityName(raw);
+    if (seen.has(stat)) continue;
+    seen.add(stat);
+    const a = scannedByName.get(stat) ?? 0;
+    const b = equippedByName.get(stat) ?? 0;
+    if (a === 0 && b === 0) continue;
+    deltas.push({ stat, delta: Math.round((a - b) * 10) / 10 });
+  }
+  return deltas;
+}

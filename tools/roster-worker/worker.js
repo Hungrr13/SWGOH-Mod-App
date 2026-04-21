@@ -316,7 +316,7 @@ export default {
       if (!scrapePath.startsWith('/')) {
         return json({ error: 'scrape path must start with /' }, 400);
       }
-      const allowed = /^\/(gac|meta|squads|characters|ships|stats)\/?/.test(scrapePath);
+      const allowed = /^\/(gac|meta|squads|characters|ships|stats|units)\/?/.test(scrapePath);
       if (!allowed) {
         return json({ error: 'scrape path not on allow-list' }, 400);
       }

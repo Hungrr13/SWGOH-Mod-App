@@ -120,6 +120,12 @@ export default function OverlayCaptureScreen({ onBack, onUseInFinder, onUseInSli
       const wasBackgrounded = appStateRef.current === 'background' || appStateRef.current === 'inactive';
       appStateRef.current = nextAppState;
       if (nextAppState === 'active' && wasBackgrounded) {
+        // User is back in ModForge; cancel any pending SWGOH re-launch so the
+        // 900ms retry doesn't drag them straight back to the game.
+        if (swgohLaunchRetryRef.current) {
+          clearTimeout(swgohLaunchRetryRef.current);
+          swgohLaunchRetryRef.current = null;
+        }
         refreshStatus();
       }
     });

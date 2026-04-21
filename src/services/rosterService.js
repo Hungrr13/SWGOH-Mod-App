@@ -26,7 +26,7 @@ export function setRosterApiBase(url) {
   API_BASE = url || DEFAULT_API_BASE;
 }
 
-const CACHE_KEY_PREFIX = 'swgoh_roster_v2_';
+const CACHE_KEY_PREFIX = 'swgoh_roster_v3_';
 const DEFAULT_TTL_MS = 6 * 60 * 60 * 1000;
 
 let AsyncStorage = null;
@@ -80,7 +80,42 @@ function normalizeMod(m) {
     pips: Number(m.pips ?? m.rarity ?? 0) || 0, // 1..6 dots
     level: Number(m.level ?? 0) || 0,            // 1..15
     tier: Number(m.tier ?? 0) || 0,              // 1=E .. 5=A (6-dot)
+    primary: normalizeStat(m.primary_stat || m.primary || null),
+    secondaries: normalizeSecondaries(m.secondary_stats || m.secondaries || []),
   };
+}
+
+// swgoh.gg returns primary_stat.name as plain "Offense" even when it's a %
+// (display_value "5.88%" tells the difference). We promote the name to the
+// "Offense%" variant when the display_value contains a percent sign so the
+// slice engine's priority comparator can match against "Offense%" priorities.
+// Uses the no-space form ("Offense%") to match PRIORITY_ABBR_MAP / ROLL_RULES_5DOT.
+// `parsedValue` is the human-scale number (e.g. "5.88%" → 5.88, "10" → 10)
+// so it plugs straight into the same scoring path as user-entered scan data.
+function normalizeStat(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const name = String(raw.name || '').trim();
+  const displayValue = String(raw.display_value ?? raw.displayValue ?? '').trim();
+  const isPercent = displayValue.includes('%');
+  const promotable = new Set(['Health', 'Offense', 'Protection', 'Defense']);
+  const normalizedName = isPercent && promotable.has(name) ? `${name}%` : name;
+  const parsedValue = parseFloat(displayValue.replace('%', '')) || 0;
+  return {
+    name: normalizedName,
+    rawName: name,
+    displayValue,
+    parsedValue,
+    isPercent,
+  };
+}
+
+function normalizeSecondaries(list) {
+  if (!Array.isArray(list)) return [];
+  return list.map(s => {
+    const base = normalizeStat(s);
+    if (!base) return null;
+    return { ...base, rolls: Number(s.roll ?? s.rolls ?? 1) || 1 };
+  }).filter(Boolean);
 }
 
 function normalizeRoster(data, allyCode) {

@@ -15,7 +15,7 @@ import {
   MOD_TIERS, rollEfficiency, efficiencyColor, efficiencyLabel,
 } from '../constants/modData';
 import { CHARS as RAW_CHARS } from '../data/chars';
-import { evaluateSliceMod } from '../services/sliceEngine';
+import { evaluateSliceMod, countAlignedForMatch } from '../services/sliceEngine';
 import SlicerWhyPanel from '../components/SlicerWhyPanel';
 import * as premiumState from '../services/premiumState';
 import * as rosterState from '../services/rosterState';
@@ -493,8 +493,14 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
 
             {/* Best matching characters */}
             {result.matchedCharacters.length > 0 && (() => {
-              const topScore = result.matchedCharacters[0]?.matchScore ?? 0;
-              const ownedMatches = result.matchedCharacters.filter(c => isOwnedChar(c.name));
+              // When the user specifies a mod set, only surface characters whose
+              // build uses that set. c.set is the decoded string like
+              // "Defense(x4)+Health(x2)" and the selector is a bare name.
+              const setFilteredMatches = modSet
+                ? result.matchedCharacters.filter(c => c.set && c.set.includes(modSet))
+                : result.matchedCharacters;
+              const topScore = setFilteredMatches[0]?.matchScore ?? 0;
+              const ownedMatches = setFilteredMatches.filter(c => isOwnedChar(c.name));
               const renderCharRow = (c, i, { compact = false } = {}) => {
                 const matchMeta = getMatchPresentation(c.matchScore, topScore, i);
                 const fillWidth = topScore > 0 ? `${Math.max(16, Math.round((c.matchScore / topScore) * 100))}%` : '16%';
@@ -512,15 +518,29 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
                         {c.variant === 'alternate' ? 'Alt build' : 'Main build'}
                       </Text>
                     </View>
-                    {hasRoster && (() => {
+                    {(() => {
                       const badges = [];
-                      if (!owned) {
+                      if (c.primaryPriorityIndex != null && c.primaryPriorityIndex >= 0) {
+                        badges.push(
+                          <View key="prim" style={[styles.miniBadge, styles.badgePrimaryMatch]}>
+                            <Text style={[styles.miniBadgeText, { color: '#c4b5fd' }]}>Primary stat match</Text>
+                          </View>
+                        );
+                      }
+                      if (modSet && c.set && c.set.includes(modSet)) {
+                        badges.push(
+                          <View key="set" style={[styles.miniBadge, styles.badgeSetMatch]}>
+                            <Text style={[styles.miniBadgeText, { color: '#fcd34d' }]}>Set match</Text>
+                          </View>
+                        );
+                      }
+                      if (hasRoster && !owned) {
                         badges.push(
                           <View key="own" style={[styles.miniBadge, styles.badgeNotOwned]}>
                             <Text style={[styles.miniBadgeText, { color: '#fca5a5' }]}>Not unlocked</Text>
                           </View>
                         );
-                      } else {
+                      } else if (hasRoster) {
                         const mods = modStatusFor(c.name);
                         if (!mods?.hasModData) {
                           badges.push(
@@ -529,13 +549,47 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
                             </View>
                           );
                         } else if (mods.slotShape) {
-                          // Slot-specific badge: only talk about the slot the
-                          // scanned mod would fill, not all 6 mods.
+                          // Count-based fit: how many priority-aligned secondaries
+                          // does the scanned mod have vs. the equipped mod? Stat
+                          // magnitudes are intentionally ignored — a fully levelled
+                          // mod with wrong stats is worse than a fresh mod with
+                          // two priority hits.
+                          const scannedSecsCount = secs.map(s => ({ name: s.stat }));
+                          const equippedSecs = mods.slotMod?.secondaries || [];
+                          const scannedAligned = countAlignedForMatch(c, scannedSecsCount);
+                          const equippedAligned = mods.slotMod
+                            ? countAlignedForMatch(c, equippedSecs)
+                            : 0;
+
                           if (mods.slotEmpty) {
                             badges.push(
                               <View key="mod" style={[styles.miniBadge, styles.badgeEmptySlot]}>
                                 <Text style={[styles.miniBadgeText, { color: '#fde047' }]}>
                                   {`Empty ${mods.slotShape} slot`}
+                                </Text>
+                              </View>
+                            );
+                          } else if (mods.slotMod) {
+                            let verdictLabel;
+                            let badgeStyle;
+                            let textColor;
+                            if (scannedAligned > equippedAligned) {
+                              verdictLabel = 'Better fit';
+                              badgeStyle = styles.badgeUpgrade;
+                              textColor = '#93c5fd';
+                            } else if (scannedAligned < equippedAligned) {
+                              verdictLabel = 'Worse fit';
+                              badgeStyle = styles.badgeNotOwned;
+                              textColor = '#fca5a5';
+                            } else {
+                              verdictLabel = 'Same fit';
+                              badgeStyle = styles.badgeOwned;
+                              textColor = '#cbd5e1';
+                            }
+                            badges.push(
+                              <View key="mod" style={[styles.miniBadge, badgeStyle]}>
+                                <Text style={[styles.miniBadgeText, { color: textColor }]}>
+                                  {`${verdictLabel} ${mods.slotShape} (${scannedAligned} vs ${equippedAligned})`}
                                 </Text>
                               </View>
                             );
@@ -597,24 +651,18 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
                     </View>
                     {(() => {
                       const aligned = new Set(c.alignedPriorityIndices || []);
-                      const primaryIdx = c.primaryPriorityIndex ?? -1;
                       const displayPriorities = compact ? c.priorities.slice(0, 3) : c.priorities;
                       return (
                         <View style={styles.priorityChipRow}>
                           {displayPriorities.map((p, pi) => {
                             const isAligned = aligned.has(pi);
-                            const isPrimaryHit = pi === primaryIdx;
                             const chipStyle = isAligned
                               ? styles.priorityChipAligned
-                              : isPrimaryHit
-                                ? styles.priorityChipPrimary
-                                : styles.priorityChipMuted;
+                              : styles.priorityChipMuted;
                             const textStyle = isAligned
                               ? styles.priorityChipTextAligned
-                              : isPrimaryHit
-                                ? styles.priorityChipTextPrimary
-                                : styles.priorityChipTextMuted;
-                            const marker = isAligned ? ' ✓' : isPrimaryHit ? ' ★' : '';
+                              : styles.priorityChipTextMuted;
+                            const marker = isAligned ? ' ✓' : '';
                             return (
                               <View key={`${p}-${pi}`} style={[styles.priorityChip, chipStyle]}>
                                 <Text style={[styles.priorityChipText, textStyle]}>
@@ -660,11 +708,11 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
                     activeOpacity={0.7}
                   >
                     <Text style={styles.cardTitle}>
-                      Best Characters ({result.matchedCount})
+                      Best Characters ({setFilteredMatches.length})
                     </Text>
                     <Text style={styles.chevron}>{charsExpanded ? '▲' : '▼'}</Text>
                   </TouchableOpacity>
-                  {charsExpanded && result.matchedCharacters.map((c, i) => renderCharRow(c, i))}
+                  {charsExpanded && setFilteredMatches.map((c, i) => renderCharRow(c, i))}
                 </View>
               );
             })()}
@@ -1039,6 +1087,8 @@ const createStyles = colors => StyleSheet.create({
   badgeEmptySlot: { borderColor: '#facc15', backgroundColor: '#2a2410' },
   badgeUpgrade: { borderColor: '#60a5fa', backgroundColor: '#122c3f' },
   badgeUnknown: { borderColor: '#64748b', backgroundColor: '#1e293b' },
+  badgePrimaryMatch: { borderColor: '#a78bfa', backgroundColor: 'rgba(167,139,250,0.12)' },
+  badgeSetMatch: { borderColor: '#facc15', backgroundColor: 'rgba(250,204,21,0.12)' },
   emptyHint: { color: colors.soft, fontSize: 12, fontStyle: 'italic', paddingVertical: 4 },
   // ── Stat quality ──
   statQualityRow: {

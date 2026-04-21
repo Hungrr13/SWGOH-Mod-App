@@ -294,10 +294,12 @@ class ModOverlayCaptureService : Service() {
         performScreenshotCapture()
       }
       setOnTouchListener(object : android.view.View.OnTouchListener {
+        private val touchSlop = android.view.ViewConfiguration.get(this@ModOverlayCaptureService).scaledTouchSlop
         private var startX = 0
         private var startY = 0
         private var touchStartX = 0f
         private var touchStartY = 0f
+        private var isDragging = false
 
         override fun onTouch(v: android.view.View?, event: MotionEvent): Boolean {
           val activeParams = overlayParams ?: return false
@@ -307,13 +309,25 @@ class ModOverlayCaptureService : Service() {
               startY = activeParams.y
               touchStartX = event.rawX
               touchStartY = event.rawY
+              isDragging = false
               return false
             }
             MotionEvent.ACTION_MOVE -> {
-              activeParams.x = startX - (event.rawX - touchStartX).toInt()
-              activeParams.y = startY + (event.rawY - touchStartY).toInt()
+              val dx = event.rawX - touchStartX
+              val dy = event.rawY - touchStartY
+              if (!isDragging && kotlin.math.hypot(dx, dy) < touchSlop) {
+                // Within slop — treat as still-a-tap, don't move the view.
+                return false
+              }
+              isDragging = true
+              activeParams.x = startX - dx.toInt()
+              activeParams.y = startY + dy.toInt()
               windowManager?.updateViewLayout(floatingBubble, activeParams)
               return true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+              // If we were dragging, consume the up so it doesn't fire a click.
+              return isDragging
             }
           }
           return false
@@ -783,9 +797,11 @@ class ModOverlayCaptureService : Service() {
     )
     if (showBubble) {
       attachFloatingBubble()
-    } else {
-      removeFloatingBubble()
     }
+    // Warm-only paths intentionally do not remove an existing bubble: if a
+    // previous PRIME_PROJECTION already attached it, a later AppState-change
+    // triggered warmScanner would otherwise race with the Start flow and tear
+    // the bubble down right before we swap to SWGOH.
     isRunning = true
   }
 

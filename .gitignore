@@ -24,6 +24,10 @@ tools/debug_out/
 
 # Scratch/intermediate data used by tools (regeneratable)
 tmp/
+.cache/
+
+# One-off backups
+*.bak
 
 # Claude worktrees live alongside the repo but are separate checkouts
 .claude/worktrees/
