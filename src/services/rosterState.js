@@ -55,8 +55,8 @@ export function getCurrentRoster() {
   return currentRoster;
 }
 
-export function getModSummary(baseId) {
-  return modSummary(currentRoster, baseId);
+export function getModSummary(baseId, shape) {
+  return modSummary(currentRoster, baseId, shape);
 }
 
 export function subscribe(listener) {

@@ -199,24 +199,45 @@ export function ownedBaseIdSet(rosterPayload) {
 //   upgradeable:   count of mods worth sinking mats into (level<15 OR pips<6
 //                  OR tier<5). Also null when mods data isn't available.
 //   hasModData:    false if the source didn't include mod info for this unit
-export function modSummary(rosterPayload, baseId) {
+// When `shape` (Square/Arrow/Diamond/Triangle/Circle/Cross) is supplied, the
+// summary also includes slot-specific fields: `slotShape`, `slotMod` (the mod
+// currently in that slot or null), `slotEmpty`, and `slotUpgradeable`.
+export function modSummary(rosterPayload, baseId, shape) {
   const unit = rosterPayload?.roster?.[String(baseId || '').toUpperCase()];
   if (!unit) return null;
   const mods = Array.isArray(unit.mods) ? unit.mods : [];
   if (mods.length === 0) {
-    return { missingSlots: null, upgradeable: null, hasModData: false };
+    const base = { missingSlots: null, upgradeable: null, hasModData: false };
+    if (shape) {
+      return { ...base, slotShape: shape, slotMod: null, slotEmpty: null, slotUpgradeable: null };
+    }
+    return base;
   }
   const filledShapes = new Set(mods.map(m => m.slot).filter(Boolean));
   const missingSlots = 6 - filledShapes.size;
   let upgradeable = 0;
   for (const m of mods) {
     if (!m) continue;
-    // Level < 15, or not yet 6-dot, or tier < A (5) counts as upgradeable
-    if ((m.level || 0) < 15) upgradeable++;
-    else if ((m.pips || 0) < 6) upgradeable++;
-    else if ((m.tier || 0) < 5) upgradeable++;
+    if (isModUpgradeable(m)) upgradeable++;
   }
-  return { missingSlots, upgradeable, hasModData: true };
+  const base = { missingSlots, upgradeable, hasModData: true };
+  if (!shape) return base;
+  const slotMod = mods.find(m => m && m.slot === shape) || null;
+  return {
+    ...base,
+    slotShape: shape,
+    slotMod,
+    slotEmpty: !slotMod,
+    slotUpgradeable: !!slotMod && isModUpgradeable(slotMod),
+  };
+}
+
+function isModUpgradeable(m) {
+  if (!m) return false;
+  if ((m.level || 0) < 15) return true;
+  if ((m.pips || 0) < 6) return true;
+  if ((m.tier || 0) < 5) return true;
+  return false;
 }
 
 export const __internal = { normalizeAllyCode, apiRelicToGame, normalizeRoster, normalizeMod };

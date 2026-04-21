@@ -210,22 +210,17 @@ function charLine(match, index, options = {}) {
   let badge = '';
   if (status) {
     if (status.owned === false) {
-      // Not in roster — free + premium both show this.
       badge = ' · Not unlocked';
-    } else if (status.hasModData) {
-      // Premium with mod data loaded: show whether this recommendation
-      // would fill an empty slot, replace an upgradeable mod, or is going
-      // up against a fully-maxed loadout.
-      const filled = 6 - (status.missingSlots || 0);
-      if (filled < 6) {
-        badge = ` · ${filled}/6 · Empty slot`;
-      } else if (status.upgradeable > 0) {
-        badge = ` · 6/6 · Upgrade (${status.upgradeable}↑)`;
+    } else if (status.hasModData && status.slotShape) {
+      // Slot-specific: only talk about the slot the scanned mod would fill.
+      if (status.slotEmpty) {
+        badge = ` · Empty ${status.slotShape}`;
+      } else if (status.slotUpgradeable) {
+        badge = ` · Upgrade ${status.slotShape}`;
       } else {
-        badge = ' · 6/6 · Maxed';
+        badge = ` · ${status.slotShape} maxed`;
       }
     } else if (status.owned === true) {
-      // Roster loaded (so we know they own it) but mod data missing.
       badge = ' · Owned';
     }
   }

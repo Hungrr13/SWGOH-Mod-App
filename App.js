@@ -461,12 +461,15 @@ function AppShell() {
         // (via ad-reward or premium), so a truly free / un-unlocked user
         // has `ownedNow.size === 0` and sees no badges — they get the
         // general all-character recommendation list as before.
+        const scannedShape = analysis.parsed.modShape && analysis.parsed.modShape !== 'Not found'
+          ? analysis.parsed.modShape
+          : null;
         const modStatusFor = (ownedNow && ownedNow.size > 0)
           ? (name) => {
               const baseId = charBaseIds[name];
               if (!baseId) return null;
               const owned = ownedNow.has(baseId);
-              const summary = rosterState.getModSummary(baseId);
+              const summary = rosterState.getModSummary(baseId, scannedShape);
               return summary ? { ...summary, owned } : { owned, hasModData: false };
             }
           : null;

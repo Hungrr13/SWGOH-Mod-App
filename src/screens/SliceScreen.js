@@ -161,7 +161,8 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
   const modStatusFor = (name) => {
     const baseId = CHAR_BASE_IDS[name];
     if (!baseId) return null;
-    return rosterState.getModSummary(baseId);
+    const shapeArg = shape && shape !== NONE ? shape : null;
+    return rosterState.getModSummary(baseId, shapeArg);
   };
 
   const primOptions = shape ? SHAPE_PRIMARIES[shape] ?? [] : [];
@@ -494,6 +495,7 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
             {result.matchedCharacters.length > 0 && (() => {
               const topScore = result.matchedCharacters[0]?.matchScore ?? 0;
               const ownedMatches = result.matchedCharacters.filter(c => isOwnedChar(c.name));
+              const nonOwnedMatches = result.matchedCharacters.filter(c => !isOwnedChar(c.name));
               const renderCharRow = (c, i, { compact = false } = {}) => {
                 const matchMeta = getMatchPresentation(c.matchScore, topScore, i);
                 const fillWidth = topScore > 0 ? `${Math.max(16, Math.round((c.matchScore / topScore) * 100))}%` : '16%';
@@ -529,6 +531,34 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
                               <Text style={[styles.miniBadgeText, { color: '#cbd5e1' }]}>Mods: unknown</Text>
                             </View>
                           );
+                        } else if (mods.slotShape) {
+                          // Slot-specific badge: only talk about the slot the
+                          // scanned mod would fill, not all 6 mods.
+                          if (mods.slotEmpty) {
+                            badges.push(
+                              <View key="mod" style={[styles.miniBadge, styles.badgeEmptySlot]}>
+                                <Text style={[styles.miniBadgeText, { color: '#fde047' }]}>
+                                  {`Empty ${mods.slotShape} slot`}
+                                </Text>
+                              </View>
+                            );
+                          } else if (mods.slotUpgradeable) {
+                            badges.push(
+                              <View key="mod" style={[styles.miniBadge, styles.badgeUpgrade]}>
+                                <Text style={[styles.miniBadgeText, { color: '#93c5fd' }]}>
+                                  {`Upgrade ${mods.slotShape}`}
+                                </Text>
+                              </View>
+                            );
+                          } else {
+                            badges.push(
+                              <View key="mod" style={[styles.miniBadge, styles.badgeOwned]}>
+                                <Text style={[styles.miniBadgeText, { color: '#86efac' }]}>
+                                  {`${mods.slotShape} maxed`}
+                                </Text>
+                              </View>
+                            );
+                          }
                         } else {
                           const filled = 6 - (mods.missingSlots || 0);
                           const fullyModded = mods.missingSlots === 0;
@@ -602,11 +632,15 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
                         activeOpacity={0.7}
                       >
                         <Text style={styles.cardTitle} numberOfLines={1}>
-                          Best Fit ({result.matchedCount})
+                          Best Fit ({nonOwnedMatches.length})
                         </Text>
                         <Text style={styles.chevron}>{charsExpanded ? '▲' : '▼'}</Text>
                       </TouchableOpacity>
-                      {charsExpanded && result.matchedCharacters.map((c, i) => renderCharRow(c, i, { compact: true }))}
+                      {charsExpanded && (nonOwnedMatches.length === 0 ? (
+                        <Text style={styles.emptyHint}>You already own every top match.</Text>
+                      ) : (
+                        nonOwnedMatches.map((c, localIdx) => renderCharRow(c, localIdx, { compact: true }))
+                      ))}
                     </View>
                   </View>
                 );
