@@ -272,10 +272,10 @@ const rows = [
     'OBSOLETE: after the first-run bubble fix the overlay persists across app swaps, so auto-dismissing would force a \u201cReady to scan\u201d tap every time. Keeping the bubble up is the desired UX.',
   ),
   todoRow(
-    'OPEN',
+    'DONE',
     'Slice engine / slot badge',
-    'Slot-aware mod badge should score scanned mod vs currently-equipped mod (upgrade / sidegrade / downgrade) using the slice engine, not just structural emptiness',
-    'Currently reports \u201cEmpty Circle\u201d or \u201cCircle maxed\u201d structurally. Next: compute fit-score delta so the badge reads e.g. \u201cUpgrade Circle \u2014 +8 speed\u201d.',
+    'Slot-aware mod badge scores scanned mod vs currently-equipped mod (Upgrade / Sidegrade / Downgrade) using the slice engine, not just structural emptiness',
+    'compareScannedVsEquipped() in sliceEngine.js:1130 scores both mods against the match priorities, then returns verdict (rawDelta>4 Upgrade, <-6 Downgrade, else Sidegrade), scoreDelta, and per-priority stat deltas for the badge label. Archive on next sweep.',
   ),
 ];
 
