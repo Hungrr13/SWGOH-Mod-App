@@ -442,9 +442,22 @@ function AppShell() {
           return;
         }
 
+        const isPremiumNow = premiumState.getSnapshot().isPremium;
+        const ownedNow = rosterState.getCurrentOwnedIds();
+        const charBaseIds = require('./src/data/charBaseIds').CHAR_BASE_IDS;
+        const modStatusFor = (isPremiumNow && ownedNow && ownedNow.size > 0)
+          ? (name) => {
+              const baseId = charBaseIds[name];
+              if (!baseId) return null;
+              const owned = ownedNow.has(baseId);
+              const summary = rosterState.getModSummary(baseId);
+              return summary ? { ...summary, owned } : { owned, hasModData: false };
+            }
+          : null;
         const dual = overlayRecommendation.buildOverlayRecommendations(analysis.parsed, {
           rawText: analysis?.rawText ?? '',
-          ownedBaseIds: rosterState.getCurrentOwnedIds(),
+          ownedBaseIds: ownedNow,
+          modStatusFor,
         });
 
         const parsedShape = analysis.parsed.modShape;

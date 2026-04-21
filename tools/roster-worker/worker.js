@@ -132,41 +132,36 @@ export default {
       return json({ allyCode: ally, probeResults: results }, 200);
     }
 
-    // Base player response.
-    const playerResp = await fetchUpstream(`${UPSTREAM_BASE}/api/player/${ally}/`);
+    // Single upstream fetch. `?mods=true` returns units AND a top-level
+    // `mods` array (406+ entries). When mods aren't requested, the base
+    // endpoint is lighter — fetch it instead.
+    const wantMods = url.searchParams.get('mods') === '1';
+    const upstreamUrl = wantMods
+      ? `${UPSTREAM_BASE}/api/player/${ally}/?mods=true`
+      : `${UPSTREAM_BASE}/api/player/${ally}/`;
+    const playerResp = await fetchUpstream(upstreamUrl);
     if (!playerResp.ok) return json({ error: `upstream ${playerResp.status}` }, playerResp.status);
     const data = await playerResp.json();
 
-    // Merge mods if requested.
-    if (url.searchParams.get('mods') === '1') {
-      let modsStatus = 'no-candidate-worked';
-      let modsSource = null;
-      for (const tpl of MOD_ENDPOINT_CANDIDATES) {
-        const path = tpl.replace('{code}', ally);
-        const r = await fetchJsonOrNull(UPSTREAM_BASE + path);
-        if (r.status === 200 && r.body) {
-          const arr = extractModsArray(r.body);
-          if (Array.isArray(arr) && arr.length > 0) {
-            const byId = groupModsByCharacter(arr);
-            const units = Array.isArray(data?.units) ? data.units : [];
-            for (const u of units) {
-              const d = u?.data || u;
-              if (!d) continue;
-              const id = String(d.base_id || '').toUpperCase();
-              if (id && byId[id]) d.mods = byId[id];
-            }
-            modsStatus = 'ok';
-            modsSource = path;
-            break;
-          }
-          modsStatus = `endpoint-${r.status}-empty`;
-          modsSource = path;
-        } else {
-          modsStatus = `endpoint-${r.status}`;
+    if (wantMods) {
+      const arr = Array.isArray(data?.mods) ? data.mods : [];
+      if (arr.length > 0) {
+        const byId = groupModsByCharacter(arr);
+        const units = Array.isArray(data?.units) ? data.units : [];
+        for (const u of units) {
+          const d = u?.data || u;
+          if (!d) continue;
+          const id = String(d.base_id || '').toUpperCase();
+          if (id && byId[id]) d.mods = byId[id];
         }
+        data.__modsStatus = 'ok';
+        data.__modsCount = arr.length;
+      } else {
+        data.__modsStatus = 'empty';
       }
-      data.__modsStatus = modsStatus;
-      data.__modsSource = modsSource;
+      // Drop the top-level mods array to reduce payload — we've already
+      // distributed them onto units.
+      delete data.mods;
     }
 
     return json(data, 200);

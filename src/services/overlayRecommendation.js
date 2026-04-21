@@ -202,9 +202,22 @@ export function buildOverlayRecommendation(parsed, options = {}) {
   };
 }
 
-function charLine(match, index) {
+function charLine(match, index, options = {}) {
   const setMatch = match?.fitTier && match.fitTier.includes('MainSet') ? ' • Set Match' : '';
-  return `${index + 1}. ${match.name}${setMatch}`;
+  const status = options.modStatusFor && match?.name
+    ? options.modStatusFor(match.name)
+    : null;
+  let badge = '';
+  if (status) {
+    if (status.hasModData) {
+      const filled = 6 - (status.missingSlots || 0);
+      badge = ` · ${filled}/6`;
+      if (status.upgradeable > 0) badge += ` ${status.upgradeable}↑`;
+    } else if (status.owned === false) {
+      badge = ' · ✕';
+    }
+  }
+  return `${index + 1}. ${match.name}${setMatch}${badge}`;
 }
 
 export function buildOverlayRecommendations(parsed, options = {}) {
@@ -273,7 +286,7 @@ export function buildOverlayRecommendations(parsed, options = {}) {
           ].filter(Boolean).join('\n');
 
   const charBody = topMatches.length
-    ? topMatches.map((m, i) => charLine(m, i)).join('\n')
+    ? topMatches.map((m, i) => charLine(m, i, { modStatusFor: options.modStatusFor })).join('\n')
     : 'Sell — no users.';
   const charTitle = topMatches.length
     ? `Top ${Math.min(topMatches.length, 6)} Users`

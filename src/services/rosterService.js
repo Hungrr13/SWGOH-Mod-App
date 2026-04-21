@@ -57,9 +57,10 @@ function normalizeCombatType(raw) {
 }
 
 // swgoh.gg mod slot ids → in-game shape names
+// (API returns 2..7; confirmed against a live roster payload)
 const MOD_SLOT_TO_SHAPE = {
-  1: 'Square', 2: 'Arrow', 3: 'Diamond',
-  4: 'Triangle', 5: 'Circle', 6: 'Cross',
+  2: 'Square', 3: 'Arrow', 4: 'Diamond',
+  5: 'Triangle', 6: 'Circle', 7: 'Cross',
 };
 
 // swgoh.gg mod set ids → in-game set names
