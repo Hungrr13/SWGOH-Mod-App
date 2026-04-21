@@ -21,6 +21,7 @@ This is the current repo map after the cleanup pass. If you are not sure where t
 - `src/screens/FinderScreen.js`: scores entered mod shells against character build data.
 - `src/screens/SliceScreen.js`: slicer UI, value entry, and overlay-prefill target.
 - `src/screens/OverlayCaptureScreen.js`: Android scanner workflow, capture review, debug crops, and learning buttons.
+- `src/screens/GacScreen.js`: GAC Meta tab. Premium/rewarded-ad gated. Renders top 3v3 / 5v5 squads scraped from swgoh.gg, toggles defense (holds) vs offense (counters), and ranks by `winRate * 0.7 + coverage * 0.3` when a roster is linked. Missing squad members are marked red.
 - `src/components/CharacterCard.js`: full character build card with main and backup builds.
 - `src/components/CustomPicker.js`: reusable picker UI for set/shape/primary fields.
 - `src/components/StatPickerModal.js`: searchable stat picker modal.
@@ -40,6 +41,9 @@ This is the current repo map after the cleanup pass. If you are not sure where t
 - `src/services/modTemplateLibrary.js`: scanner template manifest hydration/status helper.
 - `src/services/rosterService.js`: fetches/caches a player's SWGOH roster via ally code (proxied swgoh.gg player API). Exports `fetchRoster`, `getCachedRoster`, `clearCachedRoster`, `ownedBaseIdSet`, `setRosterApiBase`.
 - `src/services/rosterState.js`: module-level roster state holder. Hydrated from AsyncStorage on app start, exposes `getCurrentOwnedIds()` for synchronous reads in the overlay event handler, and `setAllyCode`/`clearAllyCode`/`subscribe` for the ally-code UI.
+- `src/services/premiumState.js`: AsyncStorage-backed premium / rewarded-unlock state. `FEATURES` enum (`ROSTER`, `FINDER_FULL`, `SLICER_WHY`, `GAC_META`) keys 24 h rewarded unlocks. `isPremium` is the one-time-IAP flag; `hasFeature(name)` returns true when either gate is satisfied.
+- `src/services/gacMetaService.js`: fetches/caches top GAC squads via the roster-worker `?gac=3v3|5v5` route. Includes `normalizeGacData` (defensive shape-normalizer) and `recommendSquads(payload, ownedBaseIds)` which filters to ≥60% coverage and scores by `winRate*0.7 + coverage*0.3`.
+- `src/services/gacMetaState.js`: pub/sub wrapper around `gacMetaService` with per-bracket storage and inflight dedup. Same pattern as `rosterState` / `premiumState`.
 
 ## Canonical data
 
@@ -66,7 +70,7 @@ This is the current repo map after the cleanup pass. If you are not sure where t
 - `tools/set-classifier/model-debug/`: debug JSON/model output for set-classifier work.
 - `tools/slice-eval/run-slice-eval.mjs`: manual slice scorer sandbox script.
 - `tools/debug_out/`: pulled overlay debug output from device sessions. Shape-classifier debug bitmaps and `shape-classifier-observed-debug.txt` are now written by the app to `<getExternalFilesDir>/overlay-debug/`, so `tools/pull_debug.ps1` pulls them via plain `adb pull` (works on release builds; no `run-as` required).
-- `tools/roster-worker/`: Cloudflare Worker that proxies swgoh.gg's player API (bypasses Cloudflare's interactive bot challenge). Deploy with `wrangler deploy` from inside the folder.
+- `tools/roster-worker/`: Cloudflare Worker that proxies swgoh.gg's player API (bypasses Cloudflare's interactive bot challenge) and scrapes GAC meta HTML. Deploy with `wrangler deploy` from inside the folder. Live at `swgoh-roster-proxy.trash-receipt123.workers.dev`. Supports `?allycode=<9-digit>[&mods=1]`, `?gac=3v3|5v5`, plus `probe=1` / `gacProbe=1` / `scrape=<path>` diagnostics.
 - `tools/*.js`: import, scraping, and data-refresh helpers.
 
 ## Current mod-shape status
@@ -106,6 +110,28 @@ This is the current repo map after the cleanup pass. If you are not sure where t
 - `mask-only` remains a last-resort fallback for when every guided candidate scores below the minimum confidence bar.
 
 ## Recent changes (April 2026)
+
+### GAC meta tab (premium)
+- New `GAC` tab (`src/screens/GacScreen.js`) wired in `App.js`. Gated behind premium or the `GAC_META` 24 h rewarded unlock; unlocked users get 3v3 / 5v5 + defense / offense toggles, locked users see the gate card.
+- Data flows through `gacMetaService` → `gacMetaState` → screen. `recommendSquads` filters to ≥60 % roster coverage and ranks by `winRate*0.7 + coverage*0.3`.
+- When no ally code is linked, the screen falls back to the raw global top-30 (no personalisation) so free users still see a useful page.
+- Worker scraper (`tools/roster-worker/worker.js`): swgoh.gg has no JSON API for GAC squads, so the worker fetches `/gac/squads/` and `/gac/who-to-attack/` as HTML, parses the `stat-table` rows (3-member = 3v3, 5-member = 5v5), and walks back up to six `season_id` candidates until it finds a page matching the requested bracket. Returns `{ bracket, source, squads, timestamp }` — `defenseWinRate` is the observed hold rate, `offenseWinRate` is `1 - hold` when scraped from the defense tab.
+- Added `scrape=<path>` diagnostic (allow-listed to `/gac/`, `/meta/`, `/squads/`, `/characters/`, `/ships/`, `/stats/`) and `gacProbe=1` for endpoint discovery. Both kept in so we can re-check schema changes without redeploying.
+- Premium state gained `FEATURES.GAC_META = 'gac_meta'`.
+
+### Overlay ownership + upgrade-vs-empty badges
+- `src/services/overlayRecommendation.js` `charLine()` now stamps explicit status badges based on `modStatusFor(name)`:
+  - Not owned → `· Not unlocked`
+  - Owned, no mod data yet → `· Owned`
+  - Owned with mods → `· N/6 · Empty slot` when any slot is blank, `· 6/6 · Upgrade (N↑)` when the scanned mod beats the equipped one, `· 6/6 · Maxed` when nothing to gain.
+- `App.js` builds `modStatusFor` only when `rosterState.getCurrentOwnedIds()` is populated — free (non-premium, non-rewarded) users see the general recommendation list with no ownership badges, as asked.
+- Free users who tap the ally-code input or Load button get a single "Unlock Premium Features" alert with an inline Watch Ad button. `AllyCodePanel` gates both the TextInput `onPressIn` and the Load handler on `rosterUnlocked`.
+- `SliceScreen.js` "Your Roster" card now re-numbers 1-based from `ownedMatches` index instead of inheriting the global Best-Characters rank.
+
+### Shape classifier: Circle → Diamond rescue (outer-contour tiebreaker)
+- `ModIconClassifier.kt` adds an `outerDebug` lookup on the `outer` synthetic candidate plus an `outerContourLooksNonRound` flag (`Circle score ≤ 0.35` **and** `circularity ≤ 0.55`).
+- New high-priority rescue rule ahead of the `winnerStronglyRound`-gated branch: `Circle` winner with `diamondCornerScore ≥ 0.88`, `aspectRatio in 0.92..1.10`, and `outerContourLooksNonRound` → flip to `Diamond`.
+- Motivated by a real misclassification where `mask-only` smoothed a Diamond silhouette into a Circle at 0.97 confidence. Observed `dCorner` alone can't separate a rotated Diamond from a genuinely round icon like Grievous; the raw outer-contour scan is the disambiguator.
 
 ### Color-invariant set classifier
 - `buildObservedSymbolMask` and `buildObservedSymbolEdgeMask` in `ModIconClassifier.kt` now derive thresholds from the per-image luminance median + MAD instead of hardcoded cutoffs (`luminance > 92`, etc.). Same pipeline now handles teal Potency, purple Crit Chance, orange Offense, etc. without per-color tuning.
