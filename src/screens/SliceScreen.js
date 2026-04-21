@@ -495,7 +495,6 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
             {result.matchedCharacters.length > 0 && (() => {
               const topScore = result.matchedCharacters[0]?.matchScore ?? 0;
               const ownedMatches = result.matchedCharacters.filter(c => isOwnedChar(c.name));
-              const nonOwnedMatches = result.matchedCharacters.filter(c => !isOwnedChar(c.name));
               const renderCharRow = (c, i, { compact = false } = {}) => {
                 const matchMeta = getMatchPresentation(c.matchScore, topScore, i);
                 const fillWidth = topScore > 0 ? `${Math.max(16, Math.round((c.matchScore / topScore) * 100))}%` : '16%';
@@ -633,41 +632,22 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
 
               if (showYours) {
                 return (
-                  <View style={styles.splitRow}>
-                    <View style={[styles.card, styles.splitCard]}>
-                      <TouchableOpacity
-                        style={styles.cardTitleRow}
-                        onPress={() => setCharsExpanded(e => !e)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.cardTitle} numberOfLines={1}>
-                          Your Roster ({ownedMatches.length})
-                        </Text>
-                        <Text style={styles.chevron}>{charsExpanded ? '▲' : '▼'}</Text>
-                      </TouchableOpacity>
-                      {charsExpanded && (ownedMatches.length === 0 ? (
-                        <Text style={styles.emptyHint}>No owned characters match this mod.</Text>
-                      ) : (
-                        ownedMatches.map((c, localIdx) => renderCharRow(c, localIdx, { compact: true }))
-                      ))}
-                    </View>
-                    <View style={[styles.card, styles.splitCard]}>
-                      <TouchableOpacity
-                        style={styles.cardTitleRow}
-                        onPress={() => setCharsExpanded(e => !e)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.cardTitle} numberOfLines={1}>
-                          Best Fit ({nonOwnedMatches.length})
-                        </Text>
-                        <Text style={styles.chevron}>{charsExpanded ? '▲' : '▼'}</Text>
-                      </TouchableOpacity>
-                      {charsExpanded && (nonOwnedMatches.length === 0 ? (
-                        <Text style={styles.emptyHint}>You already own every top match.</Text>
-                      ) : (
-                        nonOwnedMatches.map((c, localIdx) => renderCharRow(c, localIdx, { compact: true }))
-                      ))}
-                    </View>
+                  <View style={styles.card}>
+                    <TouchableOpacity
+                      style={styles.cardTitleRow}
+                      onPress={() => setCharsExpanded(e => !e)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.cardTitle} numberOfLines={1}>
+                        Your Roster ({ownedMatches.length})
+                      </Text>
+                      <Text style={styles.chevron}>{charsExpanded ? '▲' : '▼'}</Text>
+                    </TouchableOpacity>
+                    {charsExpanded && (ownedMatches.length === 0 ? (
+                      <Text style={styles.emptyHint}>No owned characters match this mod.</Text>
+                    ) : (
+                      ownedMatches.map((c, localIdx) => renderCharRow(c, localIdx))
+                    ))}
                   </View>
                 );
               }
