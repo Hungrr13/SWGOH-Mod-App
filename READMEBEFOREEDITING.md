@@ -111,6 +111,11 @@ This is the current repo map after the cleanup pass. If you are not sure where t
 
 ## Recent changes (April 2026)
 
+### Flat / % priority equivalence (% trumps flat)
+- New `promoteToPercent` + `normalizePriorityName` helpers in `sliceEngine.js`. Priority-list matching now treats `Health` (flat) and `Health%` as the same target — a scanned `Health%` satisfies a `Health` priority and vice versa.
+- `deriveAltPrioritiesFromFocus` coalesces flat + % SEC_FOCUS entries before ranking (keeps the higher `usagePct`, always emits the % variant), so derived alt builds no longer leak flat entries from research positions 5–6.
+- `scoreEnteredSecondaries` already applies `FLAT_TIEBREAKER_MULTIPLIER = 0.25` when a scanned flat stat supports a % plan, so the reverse case — scanned flat matching a % priority — remains a soft / "shitty" match as intended.
+
 ### Priority alignment visible on match rows
 - `scoreMatchAgainstEnteredSecondaries` in `sliceEngine.js` now also returns `alignedPriorityIndices`, `alignedStats`, `offPriorityHits`, and `primaryPriorityIndex`. Threaded through `rankedMatches` → `alignedMatches` → `matchedCharacters` so the UI can render without re-running matching.
 - `SliceScreen.js` replaces the flat `Speed › Offense% › Crit Chance%` text on each match row with colored chips: green ✓ for an entered secondary that hit that priority slot, purple ★ for a primary-stat hit, muted for unhit slots. Shown in compact mode (Your Roster / Best Fit) too, limited to top-3 chips.
