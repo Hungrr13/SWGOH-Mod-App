@@ -67,10 +67,10 @@ export default function AllyCodePanel() {
   const handleLoad = async () => {
     if (!rosterUnlocked) {
       Alert.alert(
-        'Roster Lookup Locked',
-        'Watch a short ad to unlock roster lookup for 24 hours, or upgrade to Premium for permanent ad-free access.',
+        'Unlock Premium Features',
+        'Watch a short ad to unlock premium features for 24 hours — roster lookup, ownership badges, and mod-status recommendations. Or upgrade to Premium for permanent ad-free access.',
         [
-          { text: 'Cancel', style: 'cancel' },
+          { text: 'Not now', style: 'cancel' },
           { text: 'Watch Ad', onPress: () => { handleWatchAd(); } },
         ],
       );
