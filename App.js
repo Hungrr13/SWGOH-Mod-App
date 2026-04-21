@@ -82,6 +82,17 @@ function renderOverlayCaptureScreen(props) {
   return Screen ? <Screen {...props} /> : <MissingScreen label="Scanner" />;
 }
 
+function renderGacScreen(props) {
+  let Screen = null;
+  try {
+    const mod = require('./src/screens/GacScreen');
+    Screen = mod?.default ?? mod ?? null;
+  } catch (error) {
+    Screen = null;
+  }
+  return Screen ? <Screen {...props} /> : <MissingScreen label="GAC Meta" />;
+}
+
 function GuideModalHost(props) {
   let Screen = null;
   try {
@@ -109,6 +120,7 @@ const TABS = [
   { key: 'Finder', title: 'Mod Finder', label: 'Finder', icon: '⚙', component: renderFinderScreen },
   { key: 'Slice', title: 'Mod Slicer', label: 'Slice', icon: '⚡', component: renderSliceScreen },
   { key: 'Scanner', title: 'Mod Scanner', label: 'Scanner', icon: '📸', component: renderOverlayCaptureScreen },
+  { key: 'Gac', title: 'GAC Meta', label: 'GAC', icon: '⚔', component: renderGacScreen },
 ];
 
 function AppMenu({ visible, onClose, onOpenGuide, onOpenPremium, onToggleTheme, isDark, isPremium }) {

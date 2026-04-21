@@ -40,6 +40,14 @@ const MOD_ENDPOINT_CANDIDATES = [
 // endpoints so we probe broadly and promote whichever returns usable data.
 // Expected bracket shape: '3v3' or '5v5'.
 const GAC_ENDPOINT_CANDIDATES = [
+  '/api/meta/squads/{bracket}/',
+  '/api/meta/report/gac/{bracket}/',
+  '/api/gac/',
+  '/api/gac/squads/',
+  '/api/squads/{bracket}/',
+  '/api/squads/',
+  '/api/3v3/',
+  '/api/5v5/',
   '/api/gac/squads/{bracket}/',
   '/api/gac/top-squads/{bracket}/',
   '/api/gac/meta/{bracket}/',
@@ -70,10 +78,26 @@ async function fetchUpstream(url) {
 async function fetchJsonOrNull(url) {
   try {
     const resp = await fetchUpstream(url);
-    if (!resp.ok) return { status: resp.status, body: null };
     const ct = resp.headers.get('content-type') || '';
-    if (!ct.includes('json')) return { status: resp.status, body: null, contentType: ct };
-    return { status: resp.status, body: await resp.json() };
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '');
+      return {
+        status: resp.status,
+        body: null,
+        contentType: ct,
+        bodyPreview: text.slice(0, 240),
+      };
+    }
+    if (!ct.includes('json')) {
+      const text = await resp.text().catch(() => '');
+      return {
+        status: resp.status,
+        body: null,
+        contentType: ct,
+        bodyPreview: text.slice(0, 240),
+      };
+    }
+    return { status: resp.status, body: await resp.json(), contentType: ct };
   } catch (e) {
     return { status: 0, body: null, error: e.message };
   }
@@ -111,6 +135,38 @@ function extractModsArray(body) {
   return null;
 }
 
+// Pull the given swgoh.gg page and extract `/api/...` references plus any
+// URLs that look like they return JSON. Lets us discover real endpoints
+// without having to guess paths.
+async function scrapeApiReferences(path) {
+  try {
+    const resp = await fetchUpstream(UPSTREAM_BASE + path);
+    const ct = resp.headers.get('content-type') || '';
+    if (!resp.ok || !ct.includes('html')) {
+      return { status: resp.status, contentType: ct, urls: [] };
+    }
+    const html = await resp.text();
+    const urls = new Set();
+    const re = /["'`](\/api\/[^"'`\s]+|https:\/\/swgoh\.gg\/api\/[^"'`\s]+)["'`]/g;
+    let m;
+    while ((m = re.exec(html)) !== null) urls.add(m[1]);
+    // Also look for fetch("..."/axios calls on JSON-ish paths
+    const re2 = /fetch\(\s*["'`]([^"'`]+)["'`]/g;
+    while ((m = re2.exec(html)) !== null) {
+      const u = m[1];
+      if (u.startsWith('/') || u.includes('swgoh.gg')) urls.add(u);
+    }
+    return {
+      status: resp.status,
+      contentType: ct,
+      htmlLength: html.length,
+      urls: Array.from(urls).slice(0, 60),
+    };
+  } catch (e) {
+    return { error: e.message, urls: [] };
+  }
+}
+
 function groupModsByCharacter(mods) {
   const byId = {};
   for (const m of mods) {
@@ -129,6 +185,121 @@ function validBracket(raw) {
   return s === '3v3' || s === '5v5' ? s : null;
 }
 
+// Candidate season IDs to probe. swgoh.gg alternates 3v3/5v5 seasons, so we
+// walk backwards a few seasons until we find one matching the desired bracket.
+// Current season URL uses no season_id param; older seasons use
+// `CHAMPIONSHIPS_GRAND_ARENA_GA2_EVENT_SEASON_<n>`.
+const SEASON_LOOKBACK = 6;
+function seasonCandidates() {
+  const out = [null];
+  for (let n = 78; n >= 78 - SEASON_LOOKBACK; n--) {
+    out.push(`CHAMPIONSHIPS_GRAND_ARENA_GA2_EVENT_SEASON_${n}`);
+  }
+  return out;
+}
+
+// Parse a single swgoh.gg GAC squads page into structured squad rows.
+// Each row has:
+//   - 3 (=3v3) or 5 (=5v5) div[data-unit-def-tooltip-app="<BASE_ID>"] members
+//   - Numeric cells: Seen (e.g. "143K"), Hold % (e.g. "27%"), Banners (e.g. "40.9")
+function parseGacSquadsHtml(html, defaultRole) {
+  const squads = [];
+  // Grab the first stat-table (defense on /gac/squads/, offense on /gac/who-to-attack/).
+  const tableMatch = html.match(/<table[^>]*class="[^"]*stat-table[^"]*"[\s\S]*?<\/table>/);
+  if (!tableMatch) return squads;
+  const table = tableMatch[0];
+  const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/g;
+  let row;
+  let bracketDetected = null;
+  while ((row = rowRe.exec(table)) !== null) {
+    const inner = row[1];
+    if (/<th\b/i.test(inner)) continue;
+    const members = [];
+    const memberRe = /data-unit-def-tooltip-app="([A-Z0-9_]+)"/g;
+    let mm;
+    while ((mm = memberRe.exec(inner)) !== null) members.push(mm[1]);
+    if (members.length !== 3 && members.length !== 5) continue;
+    if (!bracketDetected) bracketDetected = members.length === 3 ? '3v3' : '5v5';
+
+    const cellRe = /<td[^>]*>([\s\S]*?)<\/td>/g;
+    const cells = [];
+    let cm;
+    while ((cm = cellRe.exec(inner)) !== null) {
+      const text = cm[1].replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+      cells.push(text);
+    }
+    const numericCells = cells.filter(c => /[0-9]/.test(c) && c.length < 20);
+    const seen = parseCompactNumber(numericCells[0]);
+    const holdRaw = numericCells[1];
+    const holdPct = holdRaw ? parseFloat(holdRaw.replace('%', '')) : null;
+    const banners = numericCells[2] ? parseFloat(numericCells[2]) : null;
+
+    squads.push({
+      name: `${members[0]} lead`,
+      members,
+      role: defaultRole,
+      sampleSize: Number.isFinite(seen) ? seen : null,
+      offenseWinRate: defaultRole === 'offense' && Number.isFinite(holdPct)
+        ? Math.max(0, Math.min(1, 1 - holdPct / 100))
+        : null,
+      defenseWinRate: defaultRole === 'defense' && Number.isFinite(holdPct)
+        ? holdPct / 100
+        : null,
+      banners: Number.isFinite(banners) ? banners : null,
+    });
+  }
+  return { squads, bracket: bracketDetected };
+}
+
+function parseCompactNumber(raw) {
+  if (!raw) return null;
+  const s = String(raw).trim().replace(/,/g, '');
+  const m = s.match(/^([0-9]*\.?[0-9]+)\s*([KMB]?)/i);
+  if (!m) return null;
+  const n = parseFloat(m[1]);
+  if (!Number.isFinite(n)) return null;
+  const suffix = m[2].toUpperCase();
+  const mult = suffix === 'K' ? 1e3 : suffix === 'M' ? 1e6 : suffix === 'B' ? 1e9 : 1;
+  return Math.round(n * mult);
+}
+
+async function scrapeGacPageForBracket(pagePath, bracket, role) {
+  for (const seasonId of seasonCandidates()) {
+    const qs = seasonId ? `?season_id=${seasonId}` : '';
+    const fullUrl = UPSTREAM_BASE + pagePath + qs;
+    try {
+      const resp = await fetchUpstream(fullUrl);
+      if (!resp.ok) continue;
+      const ct = resp.headers.get('content-type') || '';
+      if (!ct.includes('html')) continue;
+      const html = await resp.text();
+      const parsed = parseGacSquadsHtml(html, role);
+      if (parsed.bracket !== bracket) continue;
+      if (parsed.squads.length === 0) continue;
+      return { squads: parsed.squads, source: pagePath + qs };
+    } catch {
+      // try next season
+    }
+  }
+  return { squads: [], source: null };
+}
+
+async function scrapeGacSquads(bracket) {
+  // Defense squads live on /gac/squads/; offensive/attack data lives on
+  // /gac/who-to-attack/. Try both so consumers see both roles.
+  const [defense, offense] = await Promise.all([
+    scrapeGacPageForBracket('/gac/squads/', bracket, 'defense'),
+    scrapeGacPageForBracket('/gac/who-to-attack/', bracket, 'offense'),
+  ]);
+  const squads = [...defense.squads, ...offense.squads];
+  return {
+    bracket,
+    source: [defense.source, offense.source].filter(Boolean).join(' + ') || null,
+    squads,
+    timestamp: Date.now(),
+  };
+}
+
 export default {
   async fetch(request) {
     const url = new URL(request.url);
@@ -136,6 +307,29 @@ export default {
     // GAC routes don't require an ally code — check them first.
     const gacProbe = url.searchParams.get('gacProbe') === '1';
     const gacBracket = validBracket(url.searchParams.get('gac'));
+
+    // Raw scrape mode: returns arbitrary swgoh.gg page HTML so we can
+    // inspect what URLs/widgets are embedded. Restricted to /gac/ tree
+    // to avoid becoming an open proxy.
+    const scrapePath = url.searchParams.get('scrape');
+    if (scrapePath) {
+      if (!scrapePath.startsWith('/')) {
+        return json({ error: 'scrape path must start with /' }, 400);
+      }
+      const allowed = /^\/(gac|meta|squads|characters|ships|stats)\/?/.test(scrapePath);
+      if (!allowed) {
+        return json({ error: 'scrape path not on allow-list' }, 400);
+      }
+      const resp = await fetchUpstream(UPSTREAM_BASE + scrapePath);
+      const text = await resp.text();
+      return new Response(text, {
+        status: resp.status,
+        headers: {
+          'Content-Type': resp.headers.get('content-type') || 'text/html',
+          'Access-Control-Allow-Origin': '*',
+        },
+      });
+    }
 
     if (gacProbe) {
       const bracket = validBracket(url.searchParams.get('bracket')) || '5v5';
@@ -147,25 +341,24 @@ export default {
           status: r.status,
           contentType: r.contentType,
           error: r.error,
+          bodyPreview: r.bodyPreview,
           shape: r.body != null ? describe(r.body) : null,
         };
       }
-      return json({ bracket, probeResults: results }, 200);
+      // Also scrape the /gac/ page HTML and extract candidate API URLs so
+      // we can discover the real endpoints that the swgoh.gg front-end
+      // actually hits.
+      const scrape = await scrapeApiReferences('/gac/');
+      return json({ bracket, probeResults: results, scrapedFromGacPage: scrape }, 200);
     }
 
     if (gacBracket) {
-      for (const tpl of GAC_ENDPOINT_CANDIDATES) {
-        const path = tpl.replace('{bracket}', gacBracket);
-        const r = await fetchJsonOrNull(UPSTREAM_BASE + path);
-        if (r.status === 200 && r.body != null) {
-          return json({
-            bracket: gacBracket,
-            source: path,
-            data: r.body,
-          }, 200);
-        }
-      }
-      return json({ error: 'No GAC endpoint returned usable data', bracket: gacBracket }, 502);
+      // swgoh.gg serves GAC meta as HTML on /gac/squads/ (defense) and
+      // /gac/who-to-attack/ (offense). Each season alternates between
+      // 3v3 and 5v5; we scan /gac/squads/ and a small window of recent
+      // seasons to find pages matching the requested bracket.
+      const result = await scrapeGacSquads(gacBracket);
+      return json(result, 200);
     }
 
     const ally = (url.searchParams.get('allycode') || '').replace(/\D/g, '');
