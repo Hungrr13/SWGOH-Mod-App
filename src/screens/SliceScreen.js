@@ -509,11 +509,9 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
                           <Text style={[styles.rankBadgeText, { color: matchMeta.tone }]}>{`#${i + 1}`}</Text>
                         </View>
                       </View>
-                      {!compact && (
-                        <Text style={styles.charVariant}>
-                          {c.variant === 'alternate' ? 'Alt build' : 'Main build'}
-                        </Text>
-                      )}
+                      <Text style={styles.charVariant}>
+                        {c.variant === 'alternate' ? 'Alt build' : 'Main build'}
+                      </Text>
                     </View>
                     {hasRoster && (() => {
                       const badges = [];

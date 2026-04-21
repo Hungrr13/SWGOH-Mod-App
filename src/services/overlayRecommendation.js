@@ -204,6 +204,7 @@ export function buildOverlayRecommendation(parsed, options = {}) {
 
 function charLine(match, index, options = {}) {
   const setMatch = match?.fitTier && match.fitTier.includes('MainSet') ? ' • Set Match' : '';
+  const altBuild = match?.variant === 'alternate' ? ' (alt)' : '';
   const status = options.modStatusFor && match?.name
     ? options.modStatusFor(match.name)
     : null;
@@ -224,7 +225,7 @@ function charLine(match, index, options = {}) {
       badge = ' · Owned';
     }
   }
-  return `${index + 1}. ${match.name}${setMatch}${badge}`;
+  return `${index + 1}. ${match.name}${altBuild}${setMatch}${badge}`;
 }
 
 export function buildOverlayRecommendations(parsed, options = {}) {
