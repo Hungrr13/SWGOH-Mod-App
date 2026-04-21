@@ -103,7 +103,30 @@
       "Bash(node -e \"const p=require\\('@babel/parser'\\);const fs=require\\('fs'\\);for\\(const f of ['.claude/worktrees/friendly-stonebraker-e36642/App.js','.claude/worktrees/friendly-stonebraker-e36642/src/services/overlayRecommendation.js','.claude/worktrees/friendly-stonebraker-e36642/src/services/rosterService.js']\\){try{p.parse\\(fs.readFileSync\\('/c/Users/Chad/my-app/'+f,'utf8'\\),{sourceType:'module',plugins:['jsx']}\\);console.log\\(f,'OK'\\);}catch\\(e\\){console.log\\(f,'ERR:',e.message\\);}}\")",
       "Bash(node -e \"const p=require\\('@babel/parser'\\);const fs=require\\('fs'\\);for\\(const f of ['.claude/worktrees/friendly-stonebraker-e36642/App.js','.claude/worktrees/friendly-stonebraker-e36642/src/services/overlayRecommendation.js','.claude/worktrees/friendly-stonebraker-e36642/src/services/rosterService.js']\\){try{p.parse\\(fs.readFileSync\\(f,'utf8'\\),{sourceType:'module',plugins:['jsx']}\\);console.log\\(f,'OK'\\);}catch\\(e\\){console.log\\(f,'ERR:',e.message\\);}}\")",
       "Bash(adb -s R5CX10W4LJY install -r android/app/build/outputs/apk/release/app-release.apk)",
-      "PowerShell(powershell -ExecutionPolicy Bypass -File C:\\\\Users\\\\Chad\\\\my-app\\\\.claude\\\\worktrees\\\\friendly-stonebraker-e36642\\\\tools\\\\pull_debug.ps1 -Png)"
+      "PowerShell(powershell -ExecutionPolicy Bypass -File C:\\\\Users\\\\Chad\\\\my-app\\\\.claude\\\\worktrees\\\\friendly-stonebraker-e36642\\\\tools\\\\pull_debug.ps1 -Png)",
+      "Bash(npx wrangler *)",
+      "Bash(curl -sS \"https://swgoh-roster-proxy.trash-receipt123.workers.dev/?gacProbe=1&bracket=5v5\")",
+      "Bash(curl -sS -H \"User-Agent: modforge/1.0\" \"https://swgoh.gg/gac/\")",
+      "Bash(curl -sS \"https://swgoh-roster-proxy.trash-receipt123.workers.dev/?scrape=/gac/\")",
+      "Bash(curl -sS 'https://swgoh-roster-proxy.trash-receipt123.workers.dev/?scrape=__TRACKED_VAR__')",
+      "Bash(curl -sS \"https://swgoh-roster-proxy.trash-receipt123.workers.dev/?scrape=/gac/squads/\" wc -c /tmp/gac_squads.html grep -oE 'href=\"[^\"]+\"' /tmp/gac_squads.html)",
+      "Bash(curl -sS \"https://swgoh-roster-proxy.trash-receipt123.workers.dev/?scrape=/gac/squads/\")",
+      "Bash(python -c ' *)",
+      "Bash(curl -s \"https://swgoh-roster-proxy.trash-receipt123.workers.dev/?gac=3v3\")",
+      "Bash(curl -s \"https://swgoh-roster-proxy.trash-receipt123.workers.dev/?gac=5v5\")",
+      "Bash(node -e \"require\\('./src/services/gacMetaService.js'\\); require\\('./src/services/gacMetaState.js'\\); console.log\\('services load ok'\\);\")",
+      "Bash(node --check src/services/gacMetaService.js)",
+      "Bash(node --check src/services/gacMetaState.js)",
+      "Bash(node --experimental-strip-types -e \"const babel = require\\('@babel/parser'\\); const fs = require\\('fs'\\); const code = fs.readFileSync\\('src/screens/GacScreen.js','utf8'\\); babel.parse\\(code, {sourceType:'module', plugins:['jsx']}\\); console.log\\('GacScreen: parse OK'\\);\")",
+      "Bash(adb devices *)",
+      "Read(//c/Users/Chad/AppData/Local/Android/Sdk/platform-tools/**)",
+      "Read(//c/Android/Sdk/platform-tools/**)",
+      "Bash(\"/c/Users/Chad/AppData/Local/Android/Sdk/platform-tools/adb.exe\" devices *)",
+      "Bash(\"/c/Users/Chad/AppData/Local/Android/Sdk/platform-tools/adb.exe\" -s R5CX10W4LJY install -r \"C:/Users/Chad/my-app/.claude/worktrees/friendly-stonebraker-e36642/android/app/build/outputs/apk/release/app-release.apk\")",
+      "Bash(node -e \"const babel = require\\('@babel/parser'\\); const fs = require\\('fs'\\); babel.parse\\(fs.readFileSync\\('src/screens/GacScreen.js','utf8'\\), {sourceType:'module', plugins:['jsx']}\\); console.log\\('OK'\\);\")",
+      "Bash(node -e 'const b=require\\('\\\\''@babel/parser'\\\\''\\); const fs=require\\('\\\\''fs'\\\\''\\); try { b.parse\\(fs.readFileSync\\('\\\\''__TRACKED_VAR__'\\\\'','\\\\''utf8'\\\\''\\),{sourceType:'\\\\''module'\\\\'',plugins:['\\\\''jsx'\\\\'']}\\); console.log\\('\\\\''OK'\\\\'', '\\\\''__TRACKED_VAR__'\\\\''\\); } catch\\(e\\) { console.log\\('\\\\''FAIL'\\\\'', '\\\\''__TRACKED_VAR__'\\\\'', e.message\\); }')",
+      "Bash(\"/c/Users/Chad/AppData/Local/Android/Sdk/platform-tools/adb.exe\" -s R5CX10W4LJY install -r android/app/build/outputs/apk/release/app-release.apk)",
+      "Bash(grep -oE '\"secs\":\"[^\"]{0,80}\"' src/data/chars.js)"
     ]
   }
 }
