@@ -8,11 +8,15 @@
 //   wrangler deploy
 //
 // Query params:
-//   allycode=XXXXXXXXX   required, 9 digits
+//   allycode=XXXXXXXXX   required for roster/mod routes, 9 digits
 //   mods=1               include per-character mod arrays (extra upstream call)
 //   probe=1              diagnostic: returns shape summaries for every
 //                        candidate mod endpoint so we can see which path
 //                        swgoh.gg actually exposes publicly
+//   gac=3v3 | gac=5v5    GAC meta route: returns top offense/defense squads
+//                        for the selected bracket (no allycode required)
+//   gacProbe=1           diagnostic: tries every candidate GAC meta endpoint
+//                        and reports shape/status for each
 //
 // Usage from the app:
 //   import { setRosterApiBase } from '../services/rosterService';
@@ -29,6 +33,19 @@ const MOD_ENDPOINT_CANDIDATES = [
   '/api/player-mods/{code}/',
   '/api/players/{code}/mods/',
   '/api/player/{code}/?mods=true',
+];
+
+// Candidate paths for GAC meta data. swgoh.gg exposes squad win-rates on
+// their /gac/ reports; we don't yet know which (if any) have clean JSON
+// endpoints so we probe broadly and promote whichever returns usable data.
+// Expected bracket shape: '3v3' or '5v5'.
+const GAC_ENDPOINT_CANDIDATES = [
+  '/api/gac/squads/{bracket}/',
+  '/api/gac/top-squads/{bracket}/',
+  '/api/gac/meta/{bracket}/',
+  '/api/gac/{bracket}/squads/',
+  '/gac/insights/squads/{bracket}/',
+  '/api/meta-report/gac/{bracket}/',
 ];
 
 async function fetchUpstream(url) {
@@ -107,9 +124,50 @@ function groupModsByCharacter(mods) {
   return byId;
 }
 
+function validBracket(raw) {
+  const s = String(raw || '').toLowerCase();
+  return s === '3v3' || s === '5v5' ? s : null;
+}
+
 export default {
   async fetch(request) {
     const url = new URL(request.url);
+
+    // GAC routes don't require an ally code — check them first.
+    const gacProbe = url.searchParams.get('gacProbe') === '1';
+    const gacBracket = validBracket(url.searchParams.get('gac'));
+
+    if (gacProbe) {
+      const bracket = validBracket(url.searchParams.get('bracket')) || '5v5';
+      const results = {};
+      for (const tpl of GAC_ENDPOINT_CANDIDATES) {
+        const path = tpl.replace('{bracket}', bracket);
+        const r = await fetchJsonOrNull(UPSTREAM_BASE + path);
+        results[path] = {
+          status: r.status,
+          contentType: r.contentType,
+          error: r.error,
+          shape: r.body != null ? describe(r.body) : null,
+        };
+      }
+      return json({ bracket, probeResults: results }, 200);
+    }
+
+    if (gacBracket) {
+      for (const tpl of GAC_ENDPOINT_CANDIDATES) {
+        const path = tpl.replace('{bracket}', gacBracket);
+        const r = await fetchJsonOrNull(UPSTREAM_BASE + path);
+        if (r.status === 200 && r.body != null) {
+          return json({
+            bracket: gacBracket,
+            source: path,
+            data: r.body,
+          }, 200);
+        }
+      }
+      return json({ error: 'No GAC endpoint returned usable data', bracket: gacBracket }, 502);
+    }
+
     const ally = (url.searchParams.get('allycode') || '').replace(/\D/g, '');
     if (ally.length !== 9) {
       return json({ error: 'Invalid ally code — expected 9 digits' }, 400);

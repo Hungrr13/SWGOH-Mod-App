@@ -127,4 +127,5 @@ export const FEATURES = {
   ROSTER: 'roster',
   FINDER_FULL: 'finder_full',
   SLICER_WHY: 'slicer_why',
+  GAC_META: 'gac_meta',
 };
