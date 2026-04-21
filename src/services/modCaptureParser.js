@@ -61,11 +61,15 @@ const STAT_ALIASES = [
   ['defense', 'Defense'],
 ];
 
+// Log-style noise that leaks into OCR. Keep "PRIMARY STAT" / "SECONDARY STATS"
+// intact — the section headers from the actual mod card are landmarks that
+// extractPrimary/extractSecondaries depend on to segment the input. Earlier
+// broader \bprim\w*\b / \bseco\w*\b patterns were stripping those headers,
+// which caused extractSecondaries to fall through to "scan every line" and
+// mis-ingest the primary as a secondary.
 const OCR_NOISE_PATTERNS = [
   /scanning mod\.\.\./gi,
   /reading the visible primary and secondary stats\.?/gi,
-  /\bprim\w*\b/gi,
-  /\bseco\w*\b/gi,
   /floating button tapped at .*?capturing screenshot\.?/gi,
   /mod captured at .*?\./gi,
   /capture failed at .*?\./gi,
@@ -501,7 +505,17 @@ function extractSecondaries(lines, primary, fullText = '') {
     if (!raw.includes('%')) item.value = `${raw}%`;
   });
 
-  return found.slice(0, 4);
+  // Drop anything that now matches the primary stat. The earlier primaryKey
+  // check ran before the flat-to-% promotion, so a line like "5.88% Health"
+  // on a Health%-primary mod could still sneak in as flat "Health" and then
+  // get promoted to "Health%" after deduping — colliding with the primary
+  // and pushing a real secondary past the 4-item cap.
+  const primaryCanon = primary?.toLowerCase?.() ?? '';
+  const filtered = primaryCanon
+    ? found.filter(item => !item.stat || item.stat.toLowerCase() !== primaryCanon)
+    : found;
+
+  return filtered.slice(0, 4);
 }
 
 function summarizeParserState({ modSet, modShape, primary, secondaries }) {

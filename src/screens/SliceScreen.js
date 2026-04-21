@@ -455,8 +455,11 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
           <>
             {/* Tier action card intentionally removed — the Decision card below is the single verdict. */}
 
-            {/* Slice-ladder verdict (E → D → C → B → A → 6E projection) */}
-            {result.ladderPlan && (
+            {/* Single verdict card — the ladder plan is the primary verdict;
+                the old score-based Decision is folded in as Score + reason
+                footer. Fallback path keeps the score card alone if the
+                ladder plan ever fails to build. */}
+            {result.ladderPlan ? (
               <View style={[styles.verdictCard, styles.ladderCard, { borderColor: result.ladderPlan.color }]}>
                 <Text style={[styles.verdictLabel, { color: result.ladderPlan.color }]}>
                   {result.ladderPlan.label}
@@ -473,22 +476,25 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
                   </Text>
                 )}
                 <Text style={styles.verdictMeaning}>{result.ladderPlan.desc}</Text>
+                <Text style={styles.verdictScore}>Score: {result.finalScore} / 100</Text>
+                {result.reasonLines[0] ? (
+                  <Text style={styles.verdictReason}>{result.reasonLines[0]}</Text>
+                ) : null}
+              </View>
+            ) : (
+              <View style={[styles.verdictCard, { borderColor: decisionColor(result.decision) }]}>
+                <Text style={[styles.verdictLabel, { color: decisionColor(result.decision) }]}>
+                  {result.decision}
+                </Text>
+                <Text style={styles.verdictScore}>Score: {result.finalScore} / 100</Text>
+                <Text style={styles.verdictMeaning}>
+                  {decisionDefinition(result.decision)}
+                </Text>
+                {result.reasonLines[0] ? (
+                  <Text style={styles.verdictReason}>{result.reasonLines[0]}</Text>
+                ) : null}
               </View>
             )}
-
-            {/* Decision */}
-            <View style={[styles.verdictCard, { borderColor: decisionColor(result.decision) }]}>
-              <Text style={[styles.verdictLabel, { color: decisionColor(result.decision) }]}>
-                {result.decision}
-              </Text>
-              <Text style={styles.verdictScore}>Score: {result.finalScore} / 100</Text>
-              <Text style={styles.verdictMeaning}>
-                {decisionDefinition(result.decision)}
-              </Text>
-              {result.reasonLines[0] ? (
-                <Text style={styles.verdictReason}>{result.reasonLines[0]}</Text>
-              ) : null}
-            </View>
 
             {/* Why · Premium / rewarded-ad gated breakdown */}
             <SlicerWhyPanel result={result} />

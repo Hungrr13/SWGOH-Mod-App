@@ -232,8 +232,14 @@ const rows = [
   todoRow(
     'DONE',
     'Scanner / parser fixes',
-    'Parser: tier letter detection + secondary roll-count preservation fixes on OCR output',
-    'extractModTier() now catches the tier when OCR glues the letter onto the first secondary line (e.g. \u201cC (2) 4.12% Protection\u201d) via a new ^([A-E])\\s+\\(\\d+\\) pattern, in addition to \u201cLVL 15 \u00b7 C\u201d / \u201c15 - A\u201d badge patterns. Second fix: extractSecondaries() was dropping the (n) roll counts because valueFirstPattern dedup-won over rollFirstPattern; now prefers the entry that carries an explicit rolls field so Protection% (2), Offense% (2), Speed (1), Defense (1) survive end-to-end. Verified on R5CX10W4LJY scan (ocr-debug-last.txt: 5C Cross).',
+    'Parser: four cascading fixes for a 5C Cross scan that was showing wrong tier + Health% phantom secondary',
+    'Fix 1: extractModTier() catches tier letter glued onto first secondary line (\u201cC (2) 4.12% Protection\u201d) via ^([A-E])\\s+\\(\\d+\\) pattern. Fix 2: extractSecondaries() dedup prefers the match that carries an explicit rolls field so valueFirstPattern doesn\u2019t win over rollFirstPattern. Fix 3: removed overly broad \\bprim\\w*\\b / \\bseco\\w*\\b noise patterns that were nuking the literal \u201cPRIMARY STAT\u201d / \u201cSECONDARY STATS\u201d headers and breaking findLineIndex-based section segmentation. Fix 4: primary-dedup now runs AFTER flat-to-% promotion so a flat \u201cHealth\u201d on a Health%-primary mod can\u2019t sneak into secondaries and push a real secondary past the 4-item cap. Verified end-to-end against on-device ocr-debug-last.txt.',
+  ),
+  todoRow(
+    'DONE',
+    'Slice screen / verdict UI',
+    'Collapsed the duplicate Decision card into the ladder-plan card so users see a single verdict',
+    'Previously SliceScreen rendered the ladder plan (\u201cSlice to 5B\u201d, cyan) AND a separate score-based Decision (\u201cFiller \u2014 not worth slicing\u201d) at the same time, which gave contradictory recommendations. Now renders one card driven by result.ladderPlan with Score: X/100 + reasonLines[0] folded in as footer lines. Old Decision card retained as fallback branch when ladderPlan is absent.',
   ),
   todoRow(
     'OPEN',
