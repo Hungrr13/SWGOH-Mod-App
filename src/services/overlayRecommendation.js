@@ -209,12 +209,24 @@ function charLine(match, index, options = {}) {
     : null;
   let badge = '';
   if (status) {
-    if (status.hasModData) {
+    if (status.owned === false) {
+      // Not in roster — free + premium both show this.
+      badge = ' · Not unlocked';
+    } else if (status.hasModData) {
+      // Premium with mod data loaded: show whether this recommendation
+      // would fill an empty slot, replace an upgradeable mod, or is going
+      // up against a fully-maxed loadout.
       const filled = 6 - (status.missingSlots || 0);
-      badge = ` · ${filled}/6`;
-      if (status.upgradeable > 0) badge += ` ${status.upgradeable}↑`;
-    } else if (status.owned === false) {
-      badge = ' · ✕';
+      if (filled < 6) {
+        badge = ` · ${filled}/6 · Empty slot`;
+      } else if (status.upgradeable > 0) {
+        badge = ` · 6/6 · Upgrade (${status.upgradeable}↑)`;
+      } else {
+        badge = ' · 6/6 · Maxed';
+      }
+    } else if (status.owned === true) {
+      // Roster loaded (so we know they own it) but mod data missing.
+      badge = ' · Owned';
     }
   }
   return `${index + 1}. ${match.name}${setMatch}${badge}`;

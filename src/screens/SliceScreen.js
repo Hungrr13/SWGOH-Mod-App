@@ -592,7 +592,7 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
                       {charsExpanded && (ownedMatches.length === 0 ? (
                         <Text style={styles.emptyHint}>No owned characters match this mod.</Text>
                       ) : (
-                        ownedMatches.map((c) => renderCharRow(c, result.matchedCharacters.indexOf(c), { compact: true }))
+                        ownedMatches.map((c, localIdx) => renderCharRow(c, localIdx, { compact: true }))
                       ))}
                     </View>
                     <View style={[styles.card, styles.splitCard]}>
