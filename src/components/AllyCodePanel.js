@@ -65,6 +65,17 @@ export default function AllyCodePanel() {
   };
 
   const handleLoad = async () => {
+    if (!rosterUnlocked) {
+      Alert.alert(
+        'Roster Lookup Locked',
+        'Watch a short ad to unlock roster lookup for 24 hours, or upgrade to Premium for permanent ad-free access.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Watch Ad', onPress: () => { handleWatchAd(); } },
+        ],
+      );
+      return;
+    }
     const typedDigits = input.replace(/\D/g, '');
     const fallback = snapshot.hasRoster ? String(snapshot.allyCode || '') : '';
     const digits = typedDigits.length === 9 ? typedDigits : fallback;
@@ -140,7 +151,7 @@ export default function AllyCodePanel() {
           </TouchableOpacity>
         </View>
       )}
-      <View style={[styles.inputRow, !rosterUnlocked && styles.inputRowDisabled]} pointerEvents={rosterUnlocked ? 'auto' : 'none'}>
+      <View style={[styles.inputRow, !rosterUnlocked && styles.inputRowDisabled]}>
         <TextInput
           style={styles.input}
           placeholder="e.g. 123-456-789"
@@ -148,7 +159,19 @@ export default function AllyCodePanel() {
           keyboardType="number-pad"
           value={input}
           onChangeText={setInput}
-          editable={!busy}
+          editable={rosterUnlocked && !busy}
+          onPressIn={() => {
+            if (!rosterUnlocked) {
+              Alert.alert(
+                'Roster Lookup Locked',
+                'Watch a short ad to unlock roster lookup for 24 hours, or upgrade to Premium for permanent ad-free access.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Watch Ad', onPress: () => { handleWatchAd(); } },
+                ],
+              );
+            }
+          }}
           maxLength={13}
         />
         <TouchableOpacity

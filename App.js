@@ -442,17 +442,19 @@ function AppShell() {
           return;
         }
 
-        const isPremiumNow = premiumState.getSnapshot().isPremium;
         const ownedNow = rosterState.getCurrentOwnedIds();
         const charBaseIds = require('./src/data/charBaseIds').CHAR_BASE_IDS;
-        // Ownership badge fires whenever a roster is loaded (free + premium).
-        // Mod-status badges require premium; free users see only owned/not-owned.
+        // Ownership + mod badges only fire when a roster is actually loaded.
+        // The roster only loads when the user has unlocked ROSTER access
+        // (via ad-reward or premium), so a truly free / un-unlocked user
+        // has `ownedNow.size === 0` and sees no badges — they get the
+        // general all-character recommendation list as before.
         const modStatusFor = (ownedNow && ownedNow.size > 0)
           ? (name) => {
               const baseId = charBaseIds[name];
               if (!baseId) return null;
               const owned = ownedNow.has(baseId);
-              const summary = isPremiumNow ? rosterState.getModSummary(baseId) : null;
+              const summary = rosterState.getModSummary(baseId);
               return summary ? { ...summary, owned } : { owned, hasModData: false };
             }
           : null;
