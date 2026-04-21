@@ -137,7 +137,61 @@ function getSetForVariant(char, variant) {
 }
 
 function getSecsForVariant(char, variant) {
-  return variant === "alternate" ? (char.buSecs || "") : (char.secs || "");
+  if (variant !== "alternate") return char.secs || "";
+  const derived = deriveAltPrioritiesFromFocus(char);
+  if (derived) return derived;
+  return char.buSecs || "";
+}
+
+// Derive an alternate-build priority list from the swgoh.gg usage research
+// (SEC_FOCUS). Strategy: take positions #1 and #2 from the main build and
+// append #5 and #6 from the full usage-sorted list, replacing #3 and #4.
+// Speed is locked: if Speed is in the main top-4 at position N, it stays at
+// position N in the alt. If Speed isn't in the research top-6, we respect
+// that (naturally-slow character) and don't force it in.
+function deriveAltPrioritiesFromFocus(char) {
+  const focus = SEC_FOCUS[char.name];
+  if (!focus || typeof focus !== "object") return null;
+
+  const mainList = parsePriorityList(char.secs || "");
+  if (mainList.length < 2) return null;
+
+  const ranked = Object.entries(focus)
+    .map(([stat, info]) => ({
+      stat: normalizeFocusStatName(stat),
+      usagePct: Number(info?.usagePct) || 0,
+    }))
+    .sort((a, b) => b.usagePct - a.usagePct);
+  if (ranked.length < 4) return null;
+
+  const normMain = mainList.map((s) => normalizeFocusStatName(s));
+  const speedIdxInMain = normMain.findIndex((s) => s === "Speed");
+
+  const topNames = new Set([normMain[0], normMain[1]]);
+  const extras = [];
+  for (const r of ranked) {
+    if (extras.length >= 2) break;
+    if (topNames.has(r.stat)) continue;
+    if (normMain[2] === r.stat || normMain[3] === r.stat) continue;
+    extras.push(r.stat);
+  }
+  if (extras.length < 2) {
+    for (const r of ranked) {
+      if (extras.length >= 2) break;
+      if (topNames.has(r.stat)) continue;
+      if (extras.includes(r.stat)) continue;
+      extras.push(r.stat);
+    }
+  }
+  if (extras.length < 2) return null;
+
+  let alt = [normMain[0], normMain[1], extras[0], extras[1]];
+  if (speedIdxInMain >= 0 && speedIdxInMain !== 0 && speedIdxInMain !== 1) {
+    alt = alt.filter((s) => s !== "Speed");
+    alt.splice(Math.min(speedIdxInMain, alt.length), 0, "Speed");
+    alt = alt.slice(0, 4);
+  }
+  return alt.join(" > ");
 }
 
 function parsePriorityList(priorityString = "") {
@@ -898,11 +952,24 @@ export function evaluateSliceMod({
   const contextRaw = scoreSynergy(secondary.scoredStats, consensus.dominantTags) - (secondary.deadCount * 12);
   const context = clamp(contextRaw, 0, 100);
 
+  // Soft no-Speed penalty. A mod with 3+ revealed secondaries and no Speed
+  // among them is worth little to the overwhelming majority of characters,
+  // so knock 12 points off and surface a reason line. Shells whose users
+  // genuinely don't want Speed (naturally slow characters) will still have
+  // high fit.score and survive the penalty.
+  const revealed = secondaries.filter(
+    (s) => s && s.name && s.val !== ""
+  );
+  const hasSpeedSecondary = revealed.some((s) => s.name === "Speed");
+  const missingSpeed = revealed.length >= 3 && !hasSpeedSecondary;
+  const noSpeedPenalty = missingSpeed ? 12 : 0;
+
   const finalScore = clamp(
     fit.score * SLICE_RULES.scoreWeights.fit +
       secondary.score * SLICE_RULES.scoreWeights.secondaries +
       upside * SLICE_RULES.scoreWeights.upside +
-      context * SLICE_RULES.scoreWeights.context,
+      context * SLICE_RULES.scoreWeights.context -
+      noSpeedPenalty,
     0,
     100
   );
@@ -950,6 +1017,9 @@ export function evaluateSliceMod({
     ...secondary.topReasons,
   ];
 
+  if (missingSpeed) {
+    reasonLines.push("No Speed secondary – almost every character wants Speed first.");
+  }
   if (forcedsell) {
     reasonLines.unshift("3+ flat base stats – low ceiling, not worth keeping.");
   } else if (noExactShellUsers) {
