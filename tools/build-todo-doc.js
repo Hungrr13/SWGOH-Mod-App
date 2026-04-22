@@ -243,9 +243,9 @@ const rows = [
   ),
   todoRow(
     'DONE',
-    'GAC worker / dual-role squads',
-    'Offense recommendations now populate with full 3- or 5-member squads from /gac/squads/ (offense = 1 - Hold %)',
-    'Original symptom: Offense toggle empty for both 3v3 and 5v5 because worker reused the stat-table parser against /gac/who-to-attack/, which has a totally different panel-per-lead layout. First attempt added a panel parser for that page but emitted 1-member "attack priority" entries, which isn\u2019t what users want. Final fix drops the who-to-attack path entirely and treats every /gac/squads/ row as dual-role: Hold % is the defense win rate; its complement is the offense win rate against that same squad. parseGacSquadsHtml emits role=\u201Eeither" squads with both offenseWinRate and defenseWinRate populated; scrapeGacSquads filters seasons by parity (odd=3v3, even=5v5) and returns the first matching page. Deployed. Verified: /?gac=3v3 returns 42 full-member squads with both rates (e.g. JABBATHEHUTT 73%/27%, 143k sample); /?gac=5v5 returns 37 from season 76 (e.g. LORDVADER 67%/33%, 88k). Client cache TTL 12h; users tap Refresh for immediate pickup.',
+    'GAC worker / attack + defense perspectives',
+    'Scrape both perspectives of /gac/squads/ so Offense shows real top attackers (not inverse of defense holds)',
+    'swgoh.gg\u2019s /gac/squads/ page takes a ?perspective=attack&sort=percent query param that returns a completely different list (top attacking squads sorted by Win %) than the default defense view (top defenders sorted by Hold %). Top attacker (SITHPALPATINE solo, 96%) is not derivable from top defender (JABBATHEHUTT+BOUSHH+KRRSANTAN 27% hold) \u2014 they\u2019re independent datasets. scrapeGacSquads now fetches both perspectives in parallel, parses each through parseGacSquadsHtml(html, role), and emits squads tagged with the appropriate role and single populated win-rate field. Attack view legitimately includes 1-member solo squads so bracket detection runs off the defense view only. Deployed. Verified: /?gac=3v3 returns 87 squads (42 def + 45 off); /?gac=5v5 returns 70 (37 def + 33 off).',
   ),
   todoRow(
     'OPEN',
