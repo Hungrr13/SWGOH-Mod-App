@@ -21,14 +21,25 @@ const SHAPE_SOURCES = {
   Cross:    require('../../assets/shapes/cross.png'),
 };
 
+// Arrow + Cross PNGs have thin, sparse silhouettes and read smaller than
+// the filled shapes at the same bounding-box size. Scale them up a touch
+// so the row of icons looks visually balanced.
+const SHAPE_SCALE = {
+  Arrow: 1.18,
+  Cross: 1.18,
+};
+
 export default function ModShapeIcon({ shape, size = 22 }) {
   const source = SHAPE_SOURCES[shape];
   if (!source) return <View style={{ width: size, height: size }} />;
+  const scaled = Math.round(size * (SHAPE_SCALE[shape] || 1));
   return (
-    <Image
-      source={source}
-      style={{ width: size, height: size }}
-      resizeMode="contain"
-    />
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <Image
+        source={source}
+        style={{ width: scaled, height: scaled }}
+        resizeMode="contain"
+      />
+    </View>
   );
 }
