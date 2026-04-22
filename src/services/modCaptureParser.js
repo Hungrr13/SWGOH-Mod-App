@@ -262,12 +262,29 @@ function extractPrimary(lines, fullText) {
   return 'Not found';
 }
 
-function inferShapeFromPrimary(primary) {
-  // Only Arrow can have Speed/Accuracy/Crit Avoidance primary. Every other
-  // primary is ambiguous across shapes, so don't infer from value here — the
-  // primary-shape constraint in chooseShape handles exclusions (Circle/Square
-  // can't have Defense%, Square owns Offense%, etc.).
+// SWGOH primary stat values are deterministic per slot × dot-tier. These
+// entries list values that uniquely identify a single shape — ambiguous values
+// (e.g. 7.5% Defense = 5-dot Arrow OR 6-dot Triangle/Cross) are omitted.
+const UNIQUE_PRIMARY_VALUES = {
+  'Defense%': [
+    { value: 11.75, shape: 'Diamond' }, // 5-dot Diamond
+    { value: 15,    shape: 'Arrow'   }, // 6-dot Arrow
+    { value: 20,    shape: 'Diamond' }, // 6-dot Diamond
+  ],
+};
+
+function inferShapeFromPrimary(primary, fullText = '') {
   if (primary === 'Speed' || primary === 'Accuracy%' || primary === 'Crit Avoidance%') return 'Arrow';
+
+  const uniqueValues = UNIQUE_PRIMARY_VALUES[primary];
+  if (uniqueValues && fullText) {
+    const match = fullText.match(/(\d+(?:\.\d+)?)%/);
+    if (match) {
+      const observed = parseFloat(match[1]);
+      const hit = uniqueValues.find(v => Math.abs(v.value - observed) < 0.05);
+      if (hit) return hit.shape;
+    }
+  }
   return null;
 }
 
@@ -311,17 +328,15 @@ function shapeSupportsPrimary(shape, primary) {
 }
 
 function chooseShape(detectedShape, inferredShape, primary, topShapeMatches = []) {
-  // The only primary that uniquely determines a shape is Speed → Arrow.
-  // Every other primary is ambiguous across shapes, so primary-based filtering
-  // only hurts accuracy when OCR misreads the primary. For all other cases
-  // trust the native classifier pipeline (detectedShape + topShapeMatches).
   if (primary === 'Speed') return 'Arrow';
 
+  // If the primary's numeric value uniquely identifies a shape (e.g. 11.75%
+  // Defense → Diamond, 15% Defense → Arrow), that's more authoritative than
+  // the icon classifier. inferShapeFromPrimary only returns unique matches.
+  if (inferredShape && inferredShape !== 'Not found') return inferredShape;
+
   // Primary-shape compatibility guard. When the OCR'd primary is only valid
-  // on specific shapes (e.g. Defense% → Diamond only, Offense% → Square only),
-  // reject shape candidates that don't allow it. This catches icon-classifier
-  // misses like a Diamond misread as Circle, where the primary (Defense%)
-  // makes the Circle call impossible.
+  // on specific shapes, reject candidates that don't allow it.
   const allowedShapes = primary
     ? Object.entries(SHAPE_PRIMARIES)
         .filter(([, primaries]) => primaries.includes(primary))
@@ -345,13 +360,11 @@ function chooseShape(detectedShape, inferredShape, primary, topShapeMatches = []
   }
 
   if (detectedShape && detectedShape !== 'Not found' && shapeOk(detectedShape)) return detectedShape;
-  if (inferredShape && inferredShape !== 'Not found' && shapeOk(inferredShape)) return inferredShape;
 
   // Primary allows only one shape (Square/Diamond), pick it.
   if (allowedShapes && allowedShapes.length === 1) return allowedShapes[0];
 
   if (detectedShape && detectedShape !== 'Not found') return detectedShape;
-  if (inferredShape && inferredShape !== 'Not found') return inferredShape;
   return 'Not found';
 }
 
@@ -605,7 +618,7 @@ function buildAnalysisResult({
   const ocrSet = findMatch(fullText, MOD_SETS) || 'Not found';
   const parsedSet = chooseSet(detectedSet, ocrSet, topSetMatches);
   const detectedPrimary = extractPrimary(normalizedLines, fullText);
-  const inferredShape = inferShapeFromPrimary(detectedPrimary);
+  const inferredShape = inferShapeFromPrimary(detectedPrimary, fullText);
   const ocrShape = findMatch(fullText, SHAPES) || 'Not found';
   const parsedShape = chooseShape(detectedShape || ocrShape, inferredShape, detectedPrimary, topShapeMatches);
   const secondaries = extractSecondaries(normalizedLines, detectedPrimary, fullText);
