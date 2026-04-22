@@ -262,16 +262,12 @@ function extractPrimary(lines, fullText) {
   return 'Not found';
 }
 
-function inferShapeFromPrimary(primary, fullText = '') {
+function inferShapeFromPrimary(primary) {
+  // Only Arrow can have Speed/Accuracy/Crit Avoidance primary. Every other
+  // primary is ambiguous across shapes, so don't infer from value here — the
+  // primary-shape constraint in chooseShape handles exclusions (Circle/Square
+  // can't have Defense%, Square owns Offense%, etc.).
   if (primary === 'Speed' || primary === 'Accuracy%' || primary === 'Crit Avoidance%') return 'Arrow';
-  if (primary === 'Offense%') return null; // Only Square has Offense%, caller enforces via SHAPE_PRIMARIES.
-  if (primary === 'Defense%') {
-    // Diamond's 5-dot Defense% primary maxes at 11.75%; Arrow/Triangle/Cross
-    // Defense% cap is 7.5% / 3.75% / 3.75%. Anything >=8% is Diamond.
-    // 6-dot Diamond Defense% is 20%.
-    const match = fullText.match(/(\d+(?:\.\d+)?)%\s*defense/i);
-    if (match && parseFloat(match[1]) >= 8) return 'Diamond';
-  }
   return null;
 }
 
@@ -609,7 +605,7 @@ function buildAnalysisResult({
   const ocrSet = findMatch(fullText, MOD_SETS) || 'Not found';
   const parsedSet = chooseSet(detectedSet, ocrSet, topSetMatches);
   const detectedPrimary = extractPrimary(normalizedLines, fullText);
-  const inferredShape = inferShapeFromPrimary(detectedPrimary, fullText);
+  const inferredShape = inferShapeFromPrimary(detectedPrimary);
   const ocrShape = findMatch(fullText, SHAPES) || 'Not found';
   const parsedShape = chooseShape(detectedShape || ocrShape, inferredShape, detectedPrimary, topShapeMatches);
   const secondaries = extractSecondaries(normalizedLines, detectedPrimary, fullText);
