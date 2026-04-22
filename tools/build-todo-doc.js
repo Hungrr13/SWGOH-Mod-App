@@ -355,6 +355,12 @@ const rows = [
     'Verify classifier on a full matrix: every shape \u00d7 every set \u00d7 every primary color/tier \u00d7 every mod level/dot-tier',
     'Following the variant-consensus tiebreak fix (mask-only wins when outer rim is rounded on a Diamond), we need an end-to-end sweep. Capture at least one scan per cell of the matrix: 6 shapes (Square/Arrow/Diamond/Triangle/Circle/Cross) \u00d7 all sets (Health/Defense/Crit Chance/Crit Dmg/Offense/Potency/Tenacity/Speed) \u00d7 tier colors (E gray/D green/C blue/B purple/A gold) \u00d7 dot levels (5 vs 6) \u00d7 primaries. Log shape/set classification result + OCR primary+secondaries per cell, then fix misses. Batch the captures into tools/debug_out/ with a naming convention so we can regression-test later.',
   ),
+  todoRow(
+    'DONE',
+    'Slice engine / 6-dot gate',
+    'Tightened the 5A\u21926E gate: dropped the 2-roll \u201cspeedBacked\u201d path, added a Speed value floor of 14 to the 3-roll path, and unified overlay + slice-tab verdicts',
+    'Previously a mod like Speed 10 \u00d7 2 rolls with mid-55% avgPriorityQuality would fire USABLE \u2192 6E; now it falls to SLICE_NEXT \u2192 5B (step-by-step). Added `speedVal >= 14` to `speedHitHard` so an unlucky 3-roll Speed that landed 9\u201313 doesn\u2019t slip through. overlayRecommendation.js now evaluates against the full DECODED_CHARS pool (matches SliceScreen) so roster-filter differences don\u2019t produce conflicting verdicts between the overlay and the Slice tab. Aligns with community guidance (\u201cSpeed \u226515 before 6-dot\u201d). GuideModal Slicer page + READMEBEFOREEDITING.md updated.',
+  ),
 ];
 
 const table = new Table({

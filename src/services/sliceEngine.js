@@ -1036,16 +1036,25 @@ function buildLadderPlan({
 
   // 5A -> 6E decision. Speed evidence or a high-gain priority stat rolled well
   // justifies 6-dot mats; otherwise stop at 5A.
-  const speedHitHard = speedSec && parseInt(speedSec.rolls, 10) >= 3;
-  const speedBacked = speedSec && parseInt(speedSec.rolls, 10) >= 2 && avgPriorityQuality >= 55;
+  //
+  // Speed at only 2 rolls is inconclusive — the stat could stay stuck at its
+  // current value through every remaining slice (each slice is ~25% to hit
+  // Speed again). Don't commit to 6E on 2 rolls alone; fall through to
+  // SLICE_NEXT so the user re-evaluates after each step.
+  //
+  // The 3+ roll gate is a proxy for the community's "Speed ≥ 15 before 6-dot"
+  // rule (3 rolls avg 15). Add a value floor so unlucky 3-roll mods that
+  // landed at the bottom of the 3–6 range (total 9–13) don't slip through.
+  const speedRolls = speedSec ? parseInt(speedSec.rolls, 10) : 0;
+  const speedVal = speedSec ? parseInt(String(speedSec.val).replace(/[^\d]/g, ''), 10) || 0 : 0;
+  const speedHitHard = speedSec && speedRolls >= 3 && speedVal >= 14;
 
   if (speedArrow && speedSec) return usable('Speed arrow with Speed secondary — always worth 6-dot.');
-  if (speedHitHard) return usable(`Speed hit ${speedSec.rolls} rolls at value ${speedSec.val} — 6-dot slice is a strong bet.`);
+  if (speedHitHard) return usable(`Speed at ${speedSec.val} over ${speedSec.rolls} rolls — 6-dot slice is a strong bet.`);
   if (strongUpside) {
     const top = priorityStats.find((s) => (SLICE_GAIN[s.name] ?? 0) >= 0.3 && s.qualityPct >= 65);
     return usable(`${top.name} rolling at ${Math.round(top.qualityPct)}% quality — 6-dot multiplies the cap.`);
   }
-  if (speedBacked) return usable(`Speed at ${speedSec.val} (${speedSec.rolls} rolls) with solid overall quality — worth 6-dot.`);
 
   // Step-by-step ladder: pre-5A mods aren't end-state decisions. Each tier
   // slice adds one random roll to an existing secondary, so a mod with

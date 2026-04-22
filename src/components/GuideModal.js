@@ -40,11 +40,12 @@ const GUIDE_PAGES = [
     eyebrow: 'Tab 3',
     title: 'Mod Slicer',
     icon: '⚡',
-    body: 'Use this tab when you are deciding whether a mod is worth slicing further. Enter the mod shell and the current secondary values, then the screen scores the mod’s potential and shows which kinds of characters benefit most.',
+    body: 'Use this tab when you are deciding whether a mod is worth slicing further. Enter the mod shell and the current secondary values, then the screen scores the mod’s potential and walks the tier ladder a step at a time.',
     tips: [
-      'Enter the actual rolled secondary values to get the most useful verdict.',
-      'Use the score breakdown to see whether the shell, secondaries, or upside are carrying the decision.',
-      'Check the best matching characters section to judge whether the mod has a clear future home.',
+      'Enter each secondary’s rolls and value accurately — the verdict is driven by roll counts, not just totals.',
+      'Verdicts follow community rules: “slice to 6-dot” only fires when Speed has 3+ rolls and value ≥ 14, a high-gain stat is already rolling 65%+ quality, or the mod is a Speed arrow.',
+      'Ambiguous pre-5A mods show Slice to {next tier} instead of a final verdict — take one tier, re-check; don’t burn mats projecting from partial rolls.',
+      'Cap at 5A means finish the free 1→15 level climb but skip 6-dot mats; Filler means equip as-is and replace when better lands.',
     ],
   },
   {

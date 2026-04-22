@@ -1,6 +1,5 @@
 import { SLICE_REF, decodeModSet, decodePrimary, ROLL_DATA } from '../constants/modData';
 import { CHARS as RAW_CHARS } from '../data/chars';
-import { CHAR_BASE_IDS } from '../data/charBaseIds';
 import { evaluateSliceMod } from './sliceEngine';
 
 // Max rolls a single secondary can have at each tier. In SWGOH each tier
@@ -59,16 +58,6 @@ const DECODED_CHARS = RAW_CHARS.filter(c => {
   buSet: c.buSet ? decodeModSet(c.buSet) : undefined,
 }));
 
-function pickChars(ownedBaseIds) {
-  if (!ownedBaseIds) return DECODED_CHARS;
-  const set = ownedBaseIds instanceof Set ? ownedBaseIds : new Set(ownedBaseIds);
-  if (set.size === 0) return DECODED_CHARS;
-  return DECODED_CHARS.filter(c => {
-    const id = CHAR_BASE_IDS[c.name];
-    return id && set.has(id);
-  });
-}
-
 const ENGINE_SLICE_REF = SLICE_REF.map(r => ({
   stat: r.s,
   max5: r.m5,
@@ -108,7 +97,10 @@ export function buildOverlayRecommendation(parsed, options = {}) {
   const primary = parsed?.primary;
   const modSet = parsed?.modSet && parsed.modSet !== 'Not found' ? parsed.modSet : '';
   const tier = parsed?.modTier || null;
-  const chars = pickChars(options.ownedBaseIds);
+  // Evaluate against the full character pool so the overlay verdict matches
+  // the Slice tab. Roster filtering would hide slice-worthy mods when the
+  // specific users who want this shell aren't in the owned list yet.
+  const chars = DECODED_CHARS;
 
   if (!shape || shape === 'Not found' || !primary || primary === 'Not found') {
     return {
@@ -258,7 +250,9 @@ export function buildOverlayRecommendations(parsed, options = {}) {
   const primary = parsed?.primary;
   const modSet = parsed?.modSet && parsed.modSet !== 'Not found' ? parsed.modSet : '';
   const tier = parsed?.modTier || null;
-  const chars = pickChars(options.ownedBaseIds);
+  // Match the Slice tab: evaluate against every character, not just the
+  // owned roster. Ownership is reflected in the per-character status badges.
+  const chars = DECODED_CHARS;
 
   if (!shape || shape === 'Not found' || !primary || primary === 'Not found') {
     return {
