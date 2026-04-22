@@ -264,9 +264,13 @@ function extractPrimary(lines, fullText) {
 
 function inferShapeFromPrimary(primary, fullText = '') {
   if (primary === 'Speed' || primary === 'Accuracy%' || primary === 'Crit Avoidance%') return 'Arrow';
+  if (primary === 'Offense%') return null; // Only Square has Offense%, caller enforces via SHAPE_PRIMARIES.
   if (primary === 'Defense%') {
+    // Diamond's 5-dot Defense% primary maxes at 11.75%; Arrow/Triangle/Cross
+    // Defense% cap is 7.5% / 3.75% / 3.75%. Anything >=8% is Diamond.
+    // 6-dot Diamond Defense% is 20%.
     const match = fullText.match(/(\d+(?:\.\d+)?)%\s*defense/i);
-    if (match && parseFloat(match[1]) >= 15) return 'Diamond';
+    if (match && parseFloat(match[1]) >= 8) return 'Diamond';
   }
   return null;
 }
@@ -317,13 +321,39 @@ function chooseShape(detectedShape, inferredShape, primary, topShapeMatches = []
   // trust the native classifier pipeline (detectedShape + topShapeMatches).
   if (primary === 'Speed') return 'Arrow';
 
+  // Primary-shape compatibility guard. When the OCR'd primary is only valid
+  // on specific shapes (e.g. Defense% → Diamond only, Offense% → Square only),
+  // reject shape candidates that don't allow it. This catches icon-classifier
+  // misses like a Diamond misread as Circle, where the primary (Defense%)
+  // makes the Circle call impossible.
+  const allowedShapes = primary
+    ? Object.entries(SHAPE_PRIMARIES)
+        .filter(([, primaries]) => primaries.includes(primary))
+        .map(([shape]) => shape)
+    : null;
+  const shapeOk = s => !allowedShapes || allowedShapes.length === 0 || allowedShapes.includes(s);
+
   const parsedMatches = parseTopMatches(topShapeMatches);
   const rankedShape = pickRankedMatch(parsedMatches, {
     minimumScore: 0.16,
     minimumMargin: 0.012,
     strongScore: 0.24,
   });
-  if (rankedShape) return rankedShape;
+  if (rankedShape && shapeOk(rankedShape)) return rankedShape;
+
+  // Classifier's top pick violated the primary constraint. Walk the ranked
+  // candidates and take the best compatible one.
+  if (allowedShapes && allowedShapes.length && parsedMatches.length) {
+    const compatible = parsedMatches.find(m => allowedShapes.includes(m.name));
+    if (compatible) return compatible.name;
+  }
+
+  if (detectedShape && detectedShape !== 'Not found' && shapeOk(detectedShape)) return detectedShape;
+  if (inferredShape && inferredShape !== 'Not found' && shapeOk(inferredShape)) return inferredShape;
+
+  // Primary allows only one shape (Square/Diamond), pick it.
+  if (allowedShapes && allowedShapes.length === 1) return allowedShapes[0];
+
   if (detectedShape && detectedShape !== 'Not found') return detectedShape;
   if (inferredShape && inferredShape !== 'Not found') return inferredShape;
   return 'Not found';
