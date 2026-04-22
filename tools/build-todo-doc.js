@@ -243,9 +243,9 @@ const rows = [
   ),
   todoRow(
     'DONE',
-    'GAC worker / offense scrape',
-    'Fixed missing Offense recommendations in GAC Meta by teaching the worker to parse swgoh.gg\u2019s /gac/who-to-attack/ page',
-    'Worker was pointing at /gac/who-to-attack/ for offense data but reusing parseGacSquadsHtml, which expects a <table class="stat-table"> of 3- or 5-member squads. The who-to-attack page has no such table \u2014 it renders 50 individual leads in <div class="panel panel--size-sm"> blocks with Seen/Win % stats. Added parseGacWhoToAttackHtml() + scrapeGacOffense() in tools/roster-worker/worker.js that extract each lead\u2019s base ID + Seen + Win %, filter by season parity (odd = 3v3, even = 5v5), and emit 1-member offense "squads". Deployed. Verified: /?gac=3v3 returns 50 offense entries (e.g. SUPREMELEADERKYLOREN 81% / 179k sample); /?gac=5v5 returns 50 from season 76. Client cache TTL 12h; users hit the Refresh button to get the new data immediately.',
+    'GAC worker / dual-role squads',
+    'Offense recommendations now populate with full 3- or 5-member squads from /gac/squads/ (offense = 1 - Hold %)',
+    'Original symptom: Offense toggle empty for both 3v3 and 5v5 because worker reused the stat-table parser against /gac/who-to-attack/, which has a totally different panel-per-lead layout. First attempt added a panel parser for that page but emitted 1-member "attack priority" entries, which isn\u2019t what users want. Final fix drops the who-to-attack path entirely and treats every /gac/squads/ row as dual-role: Hold % is the defense win rate; its complement is the offense win rate against that same squad. parseGacSquadsHtml emits role=\u201Eeither" squads with both offenseWinRate and defenseWinRate populated; scrapeGacSquads filters seasons by parity (odd=3v3, even=5v5) and returns the first matching page. Deployed. Verified: /?gac=3v3 returns 42 full-member squads with both rates (e.g. JABBATHEHUTT 73%/27%, 143k sample); /?gac=5v5 returns 37 from season 76 (e.g. LORDVADER 67%/33%, 88k). Client cache TTL 12h; users tap Refresh for immediate pickup.',
   ),
   todoRow(
     'OPEN',

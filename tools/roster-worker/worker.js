@@ -208,15 +208,19 @@ function seasonBracket(seasonId) {
   return n % 2 === 1 ? '3v3' : '5v5';
 }
 
-// Parse a single swgoh.gg GAC squads page into structured squad rows.
+// Parse a single swgoh.gg /gac/squads/ page into structured squad rows.
 // Each row has:
 //   - 3 (=3v3) or 5 (=5v5) div[data-unit-def-tooltip-app="<BASE_ID>"] members
 //   - Numeric cells: Seen (e.g. "143K"), Hold % (e.g. "27%"), Banners (e.g. "40.9")
-function parseGacSquadsHtml(html, defaultRole) {
+// Hold % is the defensive win rate (squad successfully held on defense).
+// Offensive win rate is its complement: if a squad holds 27%, attackers
+// win 73%. We emit both rates on every squad with role='either' so the
+// same payload drives both Defense (rank by holdRate) and Offense (rank
+// by inverted holdRate = "easiest squads to attack") toggles.
+function parseGacSquadsHtml(html) {
   const squads = [];
-  // Grab the first stat-table (defense on /gac/squads/, offense on /gac/who-to-attack/).
   const tableMatch = html.match(/<table[^>]*class="[^"]*stat-table[^"]*"[\s\S]*?<\/table>/);
-  if (!tableMatch) return squads;
+  if (!tableMatch) return { squads, bracket: null };
   const table = tableMatch[0];
   const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/g;
   let row;
@@ -244,17 +248,18 @@ function parseGacSquadsHtml(html, defaultRole) {
     const holdPct = holdRaw ? parseFloat(holdRaw.replace('%', '')) : null;
     const banners = numericCells[2] ? parseFloat(numericCells[2]) : null;
 
+    const defenseWinRate = Number.isFinite(holdPct) ? holdPct / 100 : null;
+    const offenseWinRate = defenseWinRate != null
+      ? Math.max(0, Math.min(1, 1 - defenseWinRate))
+      : null;
+
     squads.push({
       name: `${members[0]} lead`,
       members,
-      role: defaultRole,
+      role: 'either',
       sampleSize: Number.isFinite(seen) ? seen : null,
-      offenseWinRate: defaultRole === 'offense' && Number.isFinite(holdPct)
-        ? Math.max(0, Math.min(1, 1 - holdPct / 100))
-        : null,
-      defenseWinRate: defaultRole === 'defense' && Number.isFinite(holdPct)
-        ? holdPct / 100
-        : null,
+      offenseWinRate,
+      defenseWinRate,
       banners: Number.isFinite(banners) ? banners : null,
     });
   }
@@ -273,9 +278,17 @@ function parseCompactNumber(raw) {
   return Math.round(n * mult);
 }
 
-async function scrapeGacPageForBracket(pagePath, bracket, role) {
+// Walk the most recent few seasons and return the first /gac/squads/ page
+// matching the requested bracket. Seasons alternate 3v3/5v5 by parity, so
+// the last two calendar seasons cover both brackets (e.g. season 77 = 3v3,
+// season 76 = 5v5). We filter by `seasonBracket` first to avoid fetching
+// pages that can't match, then fall back to member-count detection.
+async function scrapeGacSquads(bracket) {
   for (const seasonId of seasonCandidates()) {
+    const sBracket = seasonBracket(seasonId);
+    if (seasonId && sBracket && sBracket !== bracket) continue;
     const qs = seasonId ? `?season_id=${seasonId}` : '';
+    const pagePath = '/gac/squads/';
     const fullUrl = UPSTREAM_BASE + pagePath + qs;
     try {
       const resp = await fetchUpstream(fullUrl);
@@ -283,110 +296,20 @@ async function scrapeGacPageForBracket(pagePath, bracket, role) {
       const ct = resp.headers.get('content-type') || '';
       if (!ct.includes('html')) continue;
       const html = await resp.text();
-      const parsed = parseGacSquadsHtml(html, role);
+      const parsed = parseGacSquadsHtml(html);
       if (parsed.bracket !== bracket) continue;
       if (parsed.squads.length === 0) continue;
-      return { squads: parsed.squads, source: pagePath + qs };
+      return {
+        bracket,
+        source: pagePath + qs,
+        squads: parsed.squads,
+        timestamp: Date.now(),
+      };
     } catch {
       // try next season
     }
   }
-  return { squads: [], source: null };
-}
-
-// /gac/who-to-attack/ serves a list of individual lead characters (not
-// squads) with "Seen" and "Win %" stats — i.e. leaders you might face on
-// defense and your aggregate win rate attacking them. We parse each panel
-// into a 1-member offense entry so downstream ranking (which expects a
-// members[] + offenseWinRate shape) can treat each as "attack priority".
-function parseGacWhoToAttackHtml(html) {
-  const entries = [];
-  // Split the document into chunks starting at each size-sm panel so we
-  // can scan a bounded region for each entry's fields.
-  const panelRe = /<div[^>]*class="[^"]*panel\s+panel--size-sm[^"]*"[^>]*>/g;
-  const starts = [];
-  let pm;
-  while ((pm = panelRe.exec(html)) !== null) starts.push(pm.index);
-  for (let i = 0; i < starts.length; i++) {
-    const start = starts[i];
-    const end = i + 1 < starts.length ? starts[i + 1] : start + 4000;
-    const block = html.slice(start, end);
-    const unitMatch = block.match(/data-unit-def-tooltip-app="([A-Z0-9_]+)"/);
-    if (!unitMatch) continue;
-    const seenMatch = block.match(
-      />\s*Seen\s*<\/div>\s*<div[^>]*class="[^"]*font-bold[^"]*"[^>]*>\s*([^<\s][^<]*?)\s*</,
-    );
-    const winMatch = block.match(
-      />\s*Win\s*%\s*<\/div>\s*<div[^>]*class="[^"]*font-bold[^"]*"[^>]*>\s*([0-9]+(?:\.[0-9]+)?)\s*%/,
-    );
-    const seen = seenMatch ? parseCompactNumber(seenMatch[1]) : null;
-    const winPct = winMatch ? parseFloat(winMatch[1]) : null;
-    if (winPct == null && seen == null) continue;
-    entries.push({ unitId: unitMatch[1], seen, winPct });
-  }
-  return entries;
-}
-
-async function scrapeGacOffense(bracket) {
-  for (const seasonId of seasonCandidates()) {
-    const sBracket = seasonBracket(seasonId);
-    if (seasonId && sBracket && sBracket !== bracket) continue;
-    const qs = seasonId ? `?season_id=${seasonId}` : '';
-    const fullUrl = UPSTREAM_BASE + '/gac/who-to-attack/' + qs;
-    try {
-      const resp = await fetchUpstream(fullUrl);
-      if (!resp.ok) continue;
-      const ct = resp.headers.get('content-type') || '';
-      if (!ct.includes('html')) continue;
-      const html = await resp.text();
-      // For the current-season request (seasonId=null) we need to confirm
-      // the page's bracket. The HTML embeds season IDs in pagination and
-      // other season links — first SEASON_<n> we find tells us the
-      // currently active season.
-      let pageBracket = sBracket;
-      if (!pageBracket) {
-        const m = html.match(/CHAMPIONSHIPS_GRAND_ARENA_GA2_EVENT_SEASON_(\d+)/);
-        if (m) {
-          const n = parseInt(m[1], 10);
-          pageBracket = n % 2 === 1 ? '3v3' : '5v5';
-        }
-      }
-      if (pageBracket && pageBracket !== bracket) continue;
-      const entries = parseGacWhoToAttackHtml(html);
-      if (entries.length === 0) continue;
-      const squads = entries.map(e => ({
-        name: `Attack ${e.unitId} lead`,
-        members: [e.unitId],
-        role: 'offense',
-        sampleSize: Number.isFinite(e.seen) ? e.seen : null,
-        offenseWinRate: Number.isFinite(e.winPct) ? e.winPct / 100 : null,
-        defenseWinRate: null,
-        banners: null,
-      }));
-      return { squads, source: '/gac/who-to-attack/' + qs };
-    } catch {
-      // try next season
-    }
-  }
-  return { squads: [], source: null };
-}
-
-async function scrapeGacSquads(bracket) {
-  // Defense squads live on /gac/squads/ as a stat-table of 3- or 5-member
-  // squads. Offense data lives on /gac/who-to-attack/ but uses a totally
-  // different layout — per-lead entries with Seen + Win % stats — so
-  // needs its own parser.
-  const [defense, offense] = await Promise.all([
-    scrapeGacPageForBracket('/gac/squads/', bracket, 'defense'),
-    scrapeGacOffense(bracket),
-  ]);
-  const squads = [...defense.squads, ...offense.squads];
-  return {
-    bracket,
-    source: [defense.source, offense.source].filter(Boolean).join(' + ') || null,
-    squads,
-    timestamp: Date.now(),
-  };
+  return { bracket, source: null, squads: [], timestamp: Date.now() };
 }
 
 export default {
