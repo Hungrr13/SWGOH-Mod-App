@@ -198,6 +198,16 @@ function seasonCandidates() {
   return out;
 }
 
+// swgoh.gg alternates 3v3/5v5 by season: odd = 3v3, even = 5v5.
+function seasonBracket(seasonId) {
+  if (!seasonId) return null;
+  const m = String(seasonId).match(/SEASON_(\d+)$/);
+  if (!m) return null;
+  const n = parseInt(m[1], 10);
+  if (!Number.isFinite(n)) return null;
+  return n % 2 === 1 ? '3v3' : '5v5';
+}
+
 // Parse a single swgoh.gg GAC squads page into structured squad rows.
 // Each row has:
 //   - 3 (=3v3) or 5 (=5v5) div[data-unit-def-tooltip-app="<BASE_ID>"] members
@@ -284,12 +294,91 @@ async function scrapeGacPageForBracket(pagePath, bracket, role) {
   return { squads: [], source: null };
 }
 
+// /gac/who-to-attack/ serves a list of individual lead characters (not
+// squads) with "Seen" and "Win %" stats — i.e. leaders you might face on
+// defense and your aggregate win rate attacking them. We parse each panel
+// into a 1-member offense entry so downstream ranking (which expects a
+// members[] + offenseWinRate shape) can treat each as "attack priority".
+function parseGacWhoToAttackHtml(html) {
+  const entries = [];
+  // Split the document into chunks starting at each size-sm panel so we
+  // can scan a bounded region for each entry's fields.
+  const panelRe = /<div[^>]*class="[^"]*panel\s+panel--size-sm[^"]*"[^>]*>/g;
+  const starts = [];
+  let pm;
+  while ((pm = panelRe.exec(html)) !== null) starts.push(pm.index);
+  for (let i = 0; i < starts.length; i++) {
+    const start = starts[i];
+    const end = i + 1 < starts.length ? starts[i + 1] : start + 4000;
+    const block = html.slice(start, end);
+    const unitMatch = block.match(/data-unit-def-tooltip-app="([A-Z0-9_]+)"/);
+    if (!unitMatch) continue;
+    const seenMatch = block.match(
+      />\s*Seen\s*<\/div>\s*<div[^>]*class="[^"]*font-bold[^"]*"[^>]*>\s*([^<\s][^<]*?)\s*</,
+    );
+    const winMatch = block.match(
+      />\s*Win\s*%\s*<\/div>\s*<div[^>]*class="[^"]*font-bold[^"]*"[^>]*>\s*([0-9]+(?:\.[0-9]+)?)\s*%/,
+    );
+    const seen = seenMatch ? parseCompactNumber(seenMatch[1]) : null;
+    const winPct = winMatch ? parseFloat(winMatch[1]) : null;
+    if (winPct == null && seen == null) continue;
+    entries.push({ unitId: unitMatch[1], seen, winPct });
+  }
+  return entries;
+}
+
+async function scrapeGacOffense(bracket) {
+  for (const seasonId of seasonCandidates()) {
+    const sBracket = seasonBracket(seasonId);
+    if (seasonId && sBracket && sBracket !== bracket) continue;
+    const qs = seasonId ? `?season_id=${seasonId}` : '';
+    const fullUrl = UPSTREAM_BASE + '/gac/who-to-attack/' + qs;
+    try {
+      const resp = await fetchUpstream(fullUrl);
+      if (!resp.ok) continue;
+      const ct = resp.headers.get('content-type') || '';
+      if (!ct.includes('html')) continue;
+      const html = await resp.text();
+      // For the current-season request (seasonId=null) we need to confirm
+      // the page's bracket. The HTML embeds season IDs in pagination and
+      // other season links — first SEASON_<n> we find tells us the
+      // currently active season.
+      let pageBracket = sBracket;
+      if (!pageBracket) {
+        const m = html.match(/CHAMPIONSHIPS_GRAND_ARENA_GA2_EVENT_SEASON_(\d+)/);
+        if (m) {
+          const n = parseInt(m[1], 10);
+          pageBracket = n % 2 === 1 ? '3v3' : '5v5';
+        }
+      }
+      if (pageBracket && pageBracket !== bracket) continue;
+      const entries = parseGacWhoToAttackHtml(html);
+      if (entries.length === 0) continue;
+      const squads = entries.map(e => ({
+        name: `Attack ${e.unitId} lead`,
+        members: [e.unitId],
+        role: 'offense',
+        sampleSize: Number.isFinite(e.seen) ? e.seen : null,
+        offenseWinRate: Number.isFinite(e.winPct) ? e.winPct / 100 : null,
+        defenseWinRate: null,
+        banners: null,
+      }));
+      return { squads, source: '/gac/who-to-attack/' + qs };
+    } catch {
+      // try next season
+    }
+  }
+  return { squads: [], source: null };
+}
+
 async function scrapeGacSquads(bracket) {
-  // Defense squads live on /gac/squads/; offensive/attack data lives on
-  // /gac/who-to-attack/. Try both so consumers see both roles.
+  // Defense squads live on /gac/squads/ as a stat-table of 3- or 5-member
+  // squads. Offense data lives on /gac/who-to-attack/ but uses a totally
+  // different layout — per-lead entries with Seen + Win % stats — so
+  // needs its own parser.
   const [defense, offense] = await Promise.all([
     scrapeGacPageForBracket('/gac/squads/', bracket, 'defense'),
-    scrapeGacPageForBracket('/gac/who-to-attack/', bracket, 'offense'),
+    scrapeGacOffense(bracket),
   ]);
   const squads = [...defense.squads, ...offense.squads];
   return {

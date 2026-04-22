@@ -242,6 +242,12 @@ const rows = [
     'Previously SliceScreen rendered the ladder plan (\u201cSlice to 5B\u201d, cyan) AND a separate score-based Decision (\u201cFiller \u2014 not worth slicing\u201d) at the same time, which gave contradictory recommendations. Now renders one card driven by result.ladderPlan with Score: X/100 + reasonLines[0] folded in as footer lines. Old Decision card retained as fallback branch when ladderPlan is absent.',
   ),
   todoRow(
+    'DONE',
+    'GAC worker / offense scrape',
+    'Fixed missing Offense recommendations in GAC Meta by teaching the worker to parse swgoh.gg\u2019s /gac/who-to-attack/ page',
+    'Worker was pointing at /gac/who-to-attack/ for offense data but reusing parseGacSquadsHtml, which expects a <table class="stat-table"> of 3- or 5-member squads. The who-to-attack page has no such table \u2014 it renders 50 individual leads in <div class="panel panel--size-sm"> blocks with Seen/Win % stats. Added parseGacWhoToAttackHtml() + scrapeGacOffense() in tools/roster-worker/worker.js that extract each lead\u2019s base ID + Seen + Win %, filter by season parity (odd = 3v3, even = 5v5), and emit 1-member offense "squads". Deployed. Verified: /?gac=3v3 returns 50 offense entries (e.g. SUPREMELEADERKYLOREN 81% / 179k sample); /?gac=5v5 returns 50 from season 76. Client cache TTL 12h; users hit the Refresh button to get the new data immediately.',
+  ),
+  todoRow(
     'OPEN',
     'Scanner / native tier-color detection',
     'Detect mod tier from frame color in the native classifier (E=gray, D=green, C=blue, B=purple, A=gold) + detect 6-dot vs 5-dot from pips',
