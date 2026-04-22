@@ -52,12 +52,26 @@ const GUIDE_PAGES = [
     key: 'scanner',
     eyebrow: 'Tab 4',
     title: 'Mod Scanner',
-    icon: '📷',
+    icon: '📸',
     body: 'Use this tab to scan a mod straight from the SWGOH mod inspect screen. Start the floating bubble, jump into the game, and tap the bubble while a mod is open to capture and parse its set, shape, primary, and secondaries.',
     tips: [
       'Link your ally code at the top so character recommendations only include heroes you actually own.',
       'Tap Start Scanner Bubble, grant the overlay + screen-capture prompts once, and the bubble follows you into SWGOH.',
       'After a capture, use the Use In Finder or Use In Slicer buttons to send the parsed mod straight to the right tab.',
+      'The overlay verdict now matches the Slice tab one-for-one — same characters pool, same ladder rules.',
+    ],
+  },
+  {
+    key: 'gac',
+    eyebrow: 'Tab 5',
+    title: 'GAC Meta',
+    icon: '⚔',
+    body: 'Use this tab to see the top 3v3 and 5v5 Grand Arena squads scraped from the current swgoh.gg meta. Toggle between defense (holds) and offense (counters), and switch between your roster and the full meta.',
+    tips: [
+      'Link an ally code to see Mine mode — squads ranked by winRate × 0.7 + coverage × 0.3, gated at ≥60% coverage.',
+      'Switch to All to browse every meta squad regardless of how many members you own; missing members are marked red.',
+      'Use the 3v3 / 5v5 bracket pill to match the bracket you\u2019re playing — the two datasets are scraped independently.',
+      'Premium / rewarded-ad gated: watch a short ad to unlock the feature for 24 hours, or go premium to keep it unlocked.',
     ],
   },
 ];
