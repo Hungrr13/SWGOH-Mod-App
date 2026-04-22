@@ -111,6 +111,11 @@ This is the current repo map after the cleanup pass. If you are not sure where t
 
 ## Recent changes (April 2026)
 
+### GAC screen: My-roster vs All-meta view toggle
+- Added a third toggle row on `GacScreen` (below Defense/Offense, shown only when a roster is linked) that switches between **My roster** and **All meta**. My-roster mode is the existing behavior — `recommendSquads` filters to ≥60% coverage and ranks by `winRate * 0.7 + coverage * 0.3`. All-meta mode shows the full top-30 from the worker payload, role-filtered and sorted by raw win-rate, so players can see what to strive toward even if they can't field the squad today.
+- All-meta mode still computes per-squad `ownedCount` / `coverage` against the linked roster so missing-member red chips render correctly. The no-roster case (no ally code linked) already behaves like All-meta and collapses into the same code path via `const showAll = !hasRoster || view === 'all'`.
+- Subtitle and summary banner adjust to reflect the active view: My-roster shows "N of M top squads have ≥60% coverage", All-meta shows "Showing full meta — missing members highlighted in red".
+
 ### GAC screen: Attack/Defense toggle respects role when no roster is loaded
 - With no roster linked, `GacScreen.squadsToShow` returned `payload.squads.slice(0, 30)` regardless of which toggle was selected. The worker concatenates defense squads first, then offense, so the unfiltered top 30 was always all defenders — Attack mode showed Jabba/Lord Vader/Rey leads with empty win% fields (offenseWinRate is null on defense rows and vice versa).
 - Fix in `src/screens/GacScreen.js`: the no-roster branch now filters `payload.squads` by `sq.role === role` and sorts by the matching win-rate metric (`offenseWinRate` for Attack, `defenseWinRate` for Defense). The result is wrapped in `{ squad, ownedCount: null, coverage: null }` so the render code's existing `item.squad || item` fallback keeps working unchanged.

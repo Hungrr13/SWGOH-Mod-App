@@ -43,6 +43,7 @@ export default function GacScreen() {
 
   const [bracket, setBracket] = useState('5v5');
   const [role, setRole] = useState('defense');
+  const [view, setView] = useState('mine');
   const [snapshot, setSnapshot] = useState(() => gacMetaState.getSnapshot());
   const [roster, setRoster] = useState(() => rosterState.getSnapshot());
   const [premium, setPremium] = useState(() => premiumState.getSnapshot());
@@ -101,17 +102,26 @@ export default function GacScreen() {
     }
   }
 
+  const showAll = !hasRoster || view === 'all';
   const squadsToShow = (() => {
     if (!payload) return [];
-    if (!hasRoster) {
-      // No roster: filter by toggle role and sort by the matching
-      // win-rate metric so Attack shows actual top attackers (not the
-      // raw worker payload, which concatenates defense + offense).
+    if (showAll) {
+      // "All meta" mode: filter by toggle role and sort by the matching
+      // win-rate metric regardless of roster ownership. Also the only
+      // path available when no roster is linked.
       const metric = role === 'offense' ? 'offenseWinRate' : 'defenseWinRate';
       return (payload.squads || [])
         .filter(sq => sq.role === role && (sq[metric] ?? null) != null)
         .sort((a, b) => (b[metric] ?? 0) - (a[metric] ?? 0))
-        .map(sq => ({ squad: sq, ownedCount: null, coverage: null }))
+        .map(sq => {
+          const ownedCount = hasRoster
+            ? sq.members.reduce((n, id) => n + (ownedIds.has(id) ? 1 : 0), 0)
+            : null;
+          const coverage = hasRoster && sq.members.length
+            ? ownedCount / sq.members.length
+            : null;
+          return { squad: sq, ownedCount, coverage };
+        })
         .slice(0, 30);
     }
     const bucket = role === 'offense' ? ranked?.offense : ranked?.defense;
@@ -157,7 +167,9 @@ export default function GacScreen() {
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.title}>GAC Meta</Text>
         <Text style={styles.subtitle}>
-          {hasRoster ? 'Top squads ranked by your roster coverage.' : 'Top squads across the ladder.'}
+          {hasRoster && view === 'mine'
+            ? 'Top squads ranked by your roster coverage.'
+            : 'Top squads across the ladder.'}
         </Text>
 
         <View style={styles.toggleRow}>
@@ -197,6 +209,26 @@ export default function GacScreen() {
           ))}
         </View>
 
+        {hasRoster ? (
+          <View style={styles.toggleRow}>
+            {[
+              { key: 'mine', label: 'My roster' },
+              { key: 'all', label: 'All meta' },
+            ].map(v => (
+              <TouchableOpacity
+                key={v.key}
+                style={[styles.toggleBtn, view === v.key && styles.toggleBtnActive]}
+                onPress={() => setView(v.key)}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.toggleText, view === v.key && styles.toggleTextActive]}>
+                  {v.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : null}
+
         {!hasRoster ? (
           <View style={styles.infoCard}>
             <Text style={styles.infoText}>
@@ -218,9 +250,14 @@ export default function GacScreen() {
           </View>
         ) : null}
 
-        {hasRoster && ranked ? (
+        {hasRoster && ranked && view === 'mine' ? (
           <Text style={styles.summary}>
             {ranked.totalEligibleSquads} of {ranked.totalSquadsConsidered} top squads have ≥60% coverage on your roster.
+          </Text>
+        ) : null}
+        {hasRoster && view === 'all' ? (
+          <Text style={styles.summary}>
+            Showing full meta — missing members highlighted in red.
           </Text>
         ) : null}
 

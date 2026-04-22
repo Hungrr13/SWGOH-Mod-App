@@ -260,10 +260,10 @@ const rows = [
     'Separate from the tier-letter OCR issue. Even when the tier is picked up correctly, some scans lose one or more secondaries on the handoff from parser \u2192 App.js slicePrefill \u2192 SliceScreen. Could be: (a) a regex in extractSecondaries dropping a row whose stat name has unusual spacing/OCR noise, (b) the primary-dedup backstop added last session filtering too aggressively when a flat stat shares a name with the primary, (c) slice(0, 4) capping before a real 4th secondary is seen because a phantom row snuck in earlier. Plan: collect a fresh ocr-debug-last.txt for a mod where a secondary is missing, trace through parser step-by-step against that dump, and compare parsed.secondaries vs. the on-card text.',
   ),
   todoRow(
-    'OPEN',
+    'DONE',
     'GAC tab / roster vs meta view toggle',
-    'Add a second display mode that shows all meta squads regardless of roster coverage',
-    'Current GAC Meta tab filters to squads where the user owns \u226560% of members (MIN_COVERAGE in gacMetaService.js). That\u2019s the right default for \u201Cwhat can I actually field\u201D. Add a second toggle (alongside Attack/Defense) that shows the raw top meta regardless of what\u2019s owned \u2014 useful for players who want to see what to strive for / farm toward. Implementation: a pill toggle \u201CMine / All\u201D in GacScreen.js that swaps between ranked.offense/ranked.defense (current) and a role-filtered sort of payload.squads (no coverage gate). Missing members should still render red chips so users can see what they\u2019d need. Preserve the existing \u201Cno roster linked\u201D fallback as a special case of the \u201CAll\u201D mode.',
+    'Added a My roster / All meta toggle so users can see the full meta regardless of coverage',
+    'GacScreen now has a third toggle row (shown only when a roster is linked) that switches between ranked.offense/ranked.defense (Mine, \u226560% coverage gate) and a role-filtered win-rate sort of payload.squads (All, no gate). All mode still computes per-squad coverage/ownedCount so red-chip rendering for missing members keeps working. No-roster case already behaves like All \u2014 collapsed into the same code path via const showAll = !hasRoster || view === "all". Subtitle + summary banner adjusted to reflect the active view.',
   ),
   todoRow(
     'OPEN',
