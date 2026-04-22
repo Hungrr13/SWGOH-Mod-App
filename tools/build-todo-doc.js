@@ -343,6 +343,18 @@ const rows = [
     'Slot-aware mod badge scores scanned mod vs currently-equipped mod (Upgrade / Sidegrade / Downgrade) using the slice engine, not just structural emptiness',
     'compareScannedVsEquipped() in sliceEngine.js:1130 scores both mods against the match priorities, then returns verdict (rawDelta>4 Upgrade, <-6 Downgrade, else Sidegrade), scoreDelta, and per-priority stat deltas for the badge label. Archive on next sweep.',
   ),
+  todoRow(
+    'OPEN',
+    'Permissions UX',
+    'Screen Capture row in the in-app permissions list stays on "Not approved" even after the user has granted MediaProjection and a successful scan',
+    'Cosmetic only \u2014 scans work. The permissions panel isn\u2019t observing MediaProjection state. Likely fix: subscribe to ModOverlayCaptureModule status changes (or re-poll on resume) so the row flips to Granted after the user completes the system consent dialog.',
+  ),
+  todoRow(
+    'OPEN',
+    'Scanner / coverage verification',
+    'Verify classifier on a full matrix: every shape \u00d7 every set \u00d7 every primary color/tier \u00d7 every mod level/dot-tier',
+    'Following the variant-consensus tiebreak fix (mask-only wins when outer rim is rounded on a Diamond), we need an end-to-end sweep. Capture at least one scan per cell of the matrix: 6 shapes (Square/Arrow/Diamond/Triangle/Circle/Cross) \u00d7 all sets (Health/Defense/Crit Chance/Crit Dmg/Offense/Potency/Tenacity/Speed) \u00d7 tier colors (E gray/D green/C blue/B purple/A gold) \u00d7 dot levels (5 vs 6) \u00d7 primaries. Log shape/set classification result + OCR primary+secondaries per cell, then fix misses. Batch the captures into tools/debug_out/ with a naming convention so we can regression-test later.',
+  ),
 ];
 
 const table = new Table({
