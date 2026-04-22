@@ -103,7 +103,17 @@ export default function GacScreen() {
 
   const squadsToShow = (() => {
     if (!payload) return [];
-    if (!hasRoster) return payload.squads.slice(0, 30);
+    if (!hasRoster) {
+      // No roster: filter by toggle role and sort by the matching
+      // win-rate metric so Attack shows actual top attackers (not the
+      // raw worker payload, which concatenates defense + offense).
+      const metric = role === 'offense' ? 'offenseWinRate' : 'defenseWinRate';
+      return (payload.squads || [])
+        .filter(sq => sq.role === role && (sq[metric] ?? null) != null)
+        .sort((a, b) => (b[metric] ?? 0) - (a[metric] ?? 0))
+        .map(sq => ({ squad: sq, ownedCount: null, coverage: null }))
+        .slice(0, 30);
+    }
     const bucket = role === 'offense' ? ranked?.offense : ranked?.defense;
     return (bucket || []).slice(0, 30);
   })();
