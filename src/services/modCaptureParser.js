@@ -629,13 +629,16 @@ function extractModTier(text, lines) {
   // primary-stat landmark keeps this from false-matching on stat letters
   // that appear later in the card.
   if (Array.isArray(lines)) {
-    const primaryIdx = lines.findIndex(l => /primary\s*stat/i.test(String(l || '')));
-    if (primaryIdx > 0) {
-      for (let i = 0; i < primaryIdx; i++) {
-        const trimmed = String(lines[i] || '').trim();
-        const solo = trimmed.match(/^([A-E])$/);
-        if (solo) return `5${solo[1].toUpperCase()}`;
-      }
+    // Tier frame OCRs as a bare A-E letter before the stat section starts.
+    // Prefer searching everything up to "SECONDARY STATS" so a primary stat
+    // that happens to render above the tier (rare, but seen on some icon
+    // layouts) doesn't block detection.
+    const secIdx = lines.findIndex(l => /secondary\s*stat/i.test(String(l || '')));
+    const scanLimit = secIdx > 0 ? secIdx : lines.length;
+    for (let i = 0; i < scanLimit; i++) {
+      const trimmed = String(lines[i] || '').trim();
+      const solo = trimmed.match(/^([A-E])$/);
+      if (solo) return `5${solo[1].toUpperCase()}`;
     }
   }
   // Explicit "Tier X" label

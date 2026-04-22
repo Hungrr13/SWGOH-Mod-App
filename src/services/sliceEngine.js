@@ -905,8 +905,14 @@ function getNextHitNarrative(scoredStats) {
     };
   }
 
-  const best = scoredStats.reduce((a, b) => (b.targetWeight * b.upsidePct > a.targetWeight * a.upsidePct ? b : a));
-  const worst = scoredStats.reduce((a, b) => (b.targetWeight < a.targetWeight ? b : a));
+  // Both best and worst weigh "how much the character wants it" × "how much
+  // remaining ceiling the stat has". Without the upsidePct factor, worst
+  // picked whichever stat had the lowest character-want score — which
+  // flagged Defense% instead of the low-ceiling flat stats (flat Health,
+  // flat Offense) that are actually the worst next-hit outcomes.
+  const score = s => s.targetWeight * s.upsidePct;
+  const best = scoredStats.reduce((a, b) => (score(b) > score(a) ? b : a));
+  const worst = scoredStats.reduce((a, b) => (score(b) < score(a) ? b : a));
 
   return {
     bestCase: `Next hit lands on ${best.name}.`,

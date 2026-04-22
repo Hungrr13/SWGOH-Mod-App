@@ -496,8 +496,10 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
               </View>
             )}
 
-            {/* Why · Premium / rewarded-ad gated breakdown */}
-            <SlicerWhyPanel result={result} />
+            {/* Why · Premium / rewarded-ad gated breakdown — includes
+                per-secondary stat quality rows (value + thresholds), so
+                the old separate Stat Quality card has been folded in. */}
+            <SlicerWhyPanel result={result} secRows={secRows} />
 
             {/* Next hit */}
             <View style={styles.card}>
@@ -512,18 +514,9 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
               </View>
             </View>
 
-            {/* Reason lines — premium-gated (free users see headline in verdict card) */}
-            {whyUnlocked && result.reasonLines.length > 0 && (
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>Analysis</Text>
-                {result.reasonLines.map((line, i) => (
-                  <View key={i} style={styles.reasonRow}>
-                    <Text style={styles.reasonDot}>·</Text>
-                    <Text style={styles.reasonText}>{line}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
+            {/* Analysis (reasonLines) card intentionally hidden — the
+                headline reason already appears on the verdict card and
+                the full list was making the page too long. */}
 
             {/* Best matching characters */}
             {result.matchedCharacters.length > 0 && (() => {
@@ -753,30 +746,8 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
           </>
         )}
 
-        {/* ── Per-stat quality breakdown — premium-gated ── */}
-        {whyUnlocked && secRows.length > 0 && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Stat Quality</Text>
-            {secRows.map((row, i) => (
-              <View key={i} style={[styles.statQualityRow, i === secRows.length - 1 && { borderBottomWidth: 0, marginBottom: 0, paddingBottom: 0 }]}>
-                <Text style={styles.statName}>{row.stat}</Text>
-                <View style={styles.statValues}>
-                  <Text style={styles.statVal}>{row.value}</Text>
-                  <View style={[styles.qualityBadge, { borderColor: row.color }]}>
-                    <Text style={[styles.qualityText, { color: row.color }]}>
-                      {row.quality}
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.thresholdRow}>
-                  <Text style={styles.threshold}>Good: {row.ref.g}</Text>
-                  <Text style={styles.threshold}>Great: {row.ref.gr}</Text>
-                  <Text style={styles.threshold}>Max: {row.ref.m5}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
+        {/* Stat Quality card removed — merged into SlicerWhyPanel's
+            per-secondary rows above. */}
 
         {/* Reset */}
         <TouchableOpacity style={styles.resetBtn} onPress={reset}>

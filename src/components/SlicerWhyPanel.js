@@ -25,7 +25,7 @@ function bandColor(band) {
   return '#94a3b8';
 }
 
-export default function SlicerWhyPanel({ result }) {
+export default function SlicerWhyPanel({ result, secRows = [] }) {
   const theme = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [premium, setPremium] = useState(() => premiumState.getSnapshot());
@@ -115,19 +115,28 @@ export default function SlicerWhyPanel({ result }) {
       {result.scoredStats?.length ? (
         <>
           <Text style={[styles.cardTitle, { marginTop: 10 }]}>Per-Secondary</Text>
-          {result.scoredStats.map((s, i) => (
-            <View key={i} style={styles.statRow}>
-              <Text style={styles.statName}>{s.name}</Text>
-              <View style={styles.statMetaRow}>
-                <Text style={[styles.statBand, { color: bandColor(s.qualityBand) }]}>
-                  {s.qualityBand}
-                </Text>
+          {result.scoredStats.map((s, i) => {
+            const row = secRows.find(r => r.stat === s.name);
+            return (
+              <View key={i} style={styles.statRow}>
+                <View style={styles.statRowHead}>
+                  <Text style={styles.statName}>{s.name}</Text>
+                  {row?.value ? <Text style={styles.statValue}>{row.value}</Text> : null}
+                  <Text style={[styles.statBand, { color: bandColor(s.qualityBand) }]}>
+                    {s.qualityBand}
+                  </Text>
+                </View>
                 <Text style={styles.statMeta}>
                   Q {Math.round(s.qualityPct)}% · weight {Math.round(s.targetWeight)} · slice +{Math.round(s.sliceGainPct)}%
                 </Text>
+                {row?.ref ? (
+                  <Text style={styles.statThresholds}>
+                    Good: {row.ref.g} · Great: {row.ref.gr} · Max: {row.ref.m5}
+                  </Text>
+                ) : null}
               </View>
-            </View>
-          ))}
+            );
+          })}
         </>
       ) : null}
     </View>
@@ -186,15 +195,21 @@ const createStyles = colors => StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
+  statRowHead: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 8,
+  },
   statName: {
     color: colors.text,
     fontSize: 13,
     fontWeight: '700',
+    flex: 1,
   },
-  statMetaRow: {
-    flexDirection: 'row',
-    gap: 6,
-    alignItems: 'baseline',
+  statValue: {
+    color: colors.text,
+    fontSize: 12,
+    fontWeight: '600',
   },
   statBand: {
     fontSize: 11,
@@ -203,6 +218,12 @@ const createStyles = colors => StyleSheet.create({
   statMeta: {
     color: colors.muted,
     fontSize: 11,
+    marginTop: 2,
+  },
+  statThresholds: {
+    color: colors.muted,
+    fontSize: 10,
+    marginTop: 2,
   },
   gateCard: {
     backgroundColor: colors.surface,
