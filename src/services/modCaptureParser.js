@@ -311,7 +311,65 @@ function shapeSupportsPrimary(shape, primary) {
   return Array.isArray(SHAPE_PRIMARIES[shape]) && SHAPE_PRIMARIES[shape].includes(primary);
 }
 
-function chooseShape(detectedShape, inferredShape, primary, topShapeMatches = []) {
+function parseVariantShapeMatches(json) {
+  if (!json || typeof json !== 'string') return {};
+  try {
+    const obj = JSON.parse(json);
+    if (!obj || typeof obj !== 'object') return {};
+    const out = {};
+    for (const [label, arr] of Object.entries(obj)) {
+      if (!Array.isArray(arr)) continue;
+      out[label] = arr
+        .map(m => (m && typeof m === 'object'
+          ? { name: String(m.name || ''), score: Number(m.score) || 0 }
+          : null))
+        .filter(m => m && m.name);
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+// When the primary-shape filter rejects the winning variant's top pick,
+// consult all analysis variants. mask-only is the key one — it reads the
+// inner icon shape directly, so a Diamond with a rounded outer rim still
+// reads as Diamond even if the contour-driven variants prefer Circle/Cross.
+//
+// Strategy:
+//   1. If mask-only has a clear top-1 among primary-compatible shapes
+//      (margin >= 0.08 over its own #2 compatible), trust it outright.
+//   2. Otherwise, sum scores across all variants and return the highest
+//      primary-compatible shape.
+function consensusShape(variantShapeMatches, allowedShapes) {
+  if (!variantShapeMatches || !allowedShapes || allowedShapes.length === 0) return null;
+
+  const maskOnly = variantShapeMatches['mask-only'];
+  if (Array.isArray(maskOnly) && maskOnly.length) {
+    const compatible = maskOnly.filter(m => allowedShapes.includes(m.name));
+    if (compatible.length) {
+      const top = compatible[0];
+      const second = compatible[1]?.score ?? 0;
+      if (top.score - second >= 0.08) return top.name;
+    }
+  }
+
+  const sums = new Map();
+  for (const matches of Object.values(variantShapeMatches)) {
+    for (const m of matches) {
+      if (!allowedShapes.includes(m.name)) continue;
+      sums.set(m.name, (sums.get(m.name) || 0) + m.score);
+    }
+  }
+  if (sums.size === 0) return null;
+  let best = null;
+  for (const [name, score] of sums.entries()) {
+    if (!best || score > best.score) best = { name, score };
+  }
+  return best?.name || null;
+}
+
+function chooseShape(detectedShape, inferredShape, primary, topShapeMatches = [], variantShapeMatches = {}) {
   if (primary === 'Speed') return 'Arrow';
 
   // Primary-shape compatibility guard. When the OCR'd primary is only valid
@@ -331,8 +389,11 @@ function chooseShape(detectedShape, inferredShape, primary, topShapeMatches = []
   });
   if (rankedShape && shapeOk(rankedShape)) return rankedShape;
 
-  // Classifier's top pick violated the primary constraint. Walk the ranked
-  // candidates and take the best compatible one.
+  // Winner rejected by primary filter — consult all variants for consensus.
+  const consensus = consensusShape(variantShapeMatches, allowedShapes);
+  if (consensus) return consensus;
+
+  // No variants available — fall back to walking the winner's ranked list.
   if (allowedShapes && allowedShapes.length && parsedMatches.length) {
     const compatible = parsedMatches.find(m => allowedShapes.includes(m.name));
     if (compatible) return compatible.name;
@@ -570,6 +631,7 @@ function buildAnalysisResult({
   detectedSet = '',
   topShapeMatches = [],
   topSetMatches = [],
+  variantShapeMatchesJson = '',
 }) {
   if (!ocrText) {
     return {
@@ -599,7 +661,14 @@ function buildAnalysisResult({
   const detectedPrimary = extractPrimary(normalizedLines, fullText);
   const inferredShape = inferShapeFromPrimary(detectedPrimary);
   const ocrShape = findMatch(fullText, SHAPES) || 'Not found';
-  const parsedShape = chooseShape(detectedShape || ocrShape, inferredShape, detectedPrimary, topShapeMatches);
+  const variantShapeMatches = parseVariantShapeMatches(variantShapeMatchesJson);
+  const parsedShape = chooseShape(
+    detectedShape || ocrShape,
+    inferredShape,
+    detectedPrimary,
+    topShapeMatches,
+    variantShapeMatches,
+  );
   const secondaries = extractSecondaries(normalizedLines, detectedPrimary, fullText);
   const modLevel = extractModLevel(fullText);
   const modTier = extractModTier(fullText, normalizedLines);
@@ -741,6 +810,7 @@ export async function analyzeCapturedMod(input) {
       detectedSet: input.detectedSet || '',
       topShapeMatches: Array.isArray(input.topShapeMatches) ? input.topShapeMatches : [],
       topSetMatches: Array.isArray(input.topSetMatches) ? input.topSetMatches : [],
+      variantShapeMatchesJson: typeof input.variantShapeMatchesJson === 'string' ? input.variantShapeMatchesJson : '',
     });
   }
 

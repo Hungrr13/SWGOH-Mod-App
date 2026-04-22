@@ -95,6 +95,12 @@ class ModOverlayCaptureModule(
             topShapeMatches.pushString(item)
           }
           payload.putArray("topShapeMatches", topShapeMatches)
+          val variantShapeJson = intent.getStringExtra(
+            ModOverlayCaptureService.EXTRA_CAPTURE_VARIANT_SHAPE_MATCHES_JSON
+          )
+          if (variantShapeJson != null) {
+            payload.putString("variantShapeMatchesJson", variantShapeJson)
+          }
           val topSetMatches = Arguments.createArray()
           intent.getStringArrayListExtra(ModOverlayCaptureService.EXTRA_CAPTURE_TOP_SET_MATCHES)?.forEach { item ->
             topSetMatches.pushString(item)

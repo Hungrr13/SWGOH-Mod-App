@@ -39,6 +39,7 @@ class ModIconClassifier(private val context: Context) {
     val setScore: Double,
     val topShapeMatches: List<MatchScore>,
     val topSetMatches: List<MatchScore>,
+    val variantShapeMatches: Map<String, List<MatchScore>> = emptyMap(),
   )
 
   private data class ShapeCropVariant(
@@ -296,6 +297,10 @@ class ModIconClassifier(private val context: Context) {
       }
     }
 
+    val variantShapeMatches = bestShapeDetection.syntheticCandidateDebugs
+      .filter { it.topMatches.isNotEmpty() }
+      .associate { it.label to it.topMatches }
+
     return Detection(
       shape = bestShapeDetection.name,
       setName = bestSetDetection.name,
@@ -303,6 +308,7 @@ class ModIconClassifier(private val context: Context) {
       setScore = bestSetDetection.score,
       topShapeMatches = bestShapeDetection.topMatches,
       topSetMatches = bestSetDetection.topMatches,
+      variantShapeMatches = variantShapeMatches,
     )
   }
 

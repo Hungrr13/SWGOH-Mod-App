@@ -189,6 +189,7 @@ export default function OverlayCaptureScreen({ onBack, onUseInFinder, onUseInSli
           },
           topShapeMatches: Array.isArray(event.topShapeMatches) ? event.topShapeMatches : [],
           topSetMatches: Array.isArray(event.topSetMatches) ? event.topSetMatches : [],
+          variantShapeMatchesJson: typeof event.variantShapeMatchesJson === 'string' ? event.variantShapeMatchesJson : '',
         });
         setAnalysisResult(null);
       } else if (event?.type === 'captureError') {

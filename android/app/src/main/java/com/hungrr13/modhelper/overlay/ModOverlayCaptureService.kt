@@ -1542,6 +1542,23 @@ class ModOverlayCaptureService : Service() {
           EXTRA_CAPTURE_TOP_SHAPE_MATCHES,
           ArrayList(iconDetection?.topShapeMatches?.map { "${it.name}: ${"%.3f".format(it.score)}" } ?: emptyList())
         )
+        run {
+          val variantMap = iconDetection?.variantShapeMatches.orEmpty()
+          if (variantMap.isNotEmpty()) {
+            val obj = org.json.JSONObject()
+            variantMap.forEach { (label, matches) ->
+              val arr = org.json.JSONArray()
+              matches.forEach { m ->
+                arr.put(org.json.JSONObject().apply {
+                  put("name", m.name)
+                  put("score", m.score)
+                })
+              }
+              obj.put(label, arr)
+            }
+            putExtra(EXTRA_CAPTURE_VARIANT_SHAPE_MATCHES_JSON, obj.toString())
+          }
+        }
         putStringArrayListExtra(
           EXTRA_CAPTURE_TOP_SET_MATCHES,
           ArrayList(
@@ -1904,6 +1921,7 @@ class ModOverlayCaptureService : Service() {
     const val EXTRA_CAPTURE_SHAPE = "captureShape"
     const val EXTRA_CAPTURE_SET = "captureSet"
     const val EXTRA_CAPTURE_TOP_SHAPE_MATCHES = "captureTopShapeMatches"
+    const val EXTRA_CAPTURE_VARIANT_SHAPE_MATCHES_JSON = "captureVariantShapeMatchesJson"
     const val EXTRA_CAPTURE_TOP_SET_MATCHES = "captureTopSetMatches"
     const val EXTRA_CAPTURE_FOCUSED_PATH = "captureFocusedPath"
     const val EXTRA_CAPTURE_STATS_PATH = "captureStatsPath"

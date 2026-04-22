@@ -432,6 +432,7 @@ function AppShell() {
           detectedShape: event.detectedShape ?? '',
           detectedSet: event.detectedSet ?? '',
           topShapeMatches: Array.isArray(event.topShapeMatches) ? event.topShapeMatches : [],
+          variantShapeMatchesJson: typeof event.variantShapeMatchesJson === 'string' ? event.variantShapeMatchesJson : '',
         });
 
         const rawPreview = String(analysis?.rawText ?? '')
