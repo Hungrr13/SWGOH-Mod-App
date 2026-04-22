@@ -344,6 +344,25 @@ function chooseSet(detectedSet, ocrSet, topSetMatches = []) {
   return 'Not found';
 }
 
+// Returns true when a parsed secondary (stat + value pair) should be
+// interpreted as the % variant of the stat rather than its flat variant.
+// Used both by the dedup key in extractSecondaries (so flat + % variants
+// of the same base stat can coexist) and by the later promotion pass
+// (which rewrites item.stat + item.value). Single source of truth.
+const FLAT_MIN_PER_ROLL = { Offense: 22, Health: 200, Protection: 400 };
+function willPromoteToPercent(stat, value) {
+  if (!(stat in FLAT_MIN_PER_ROLL) && stat !== 'Defense') return false;
+  const raw = String(value || '');
+  if (raw.includes('%')) return true;
+  const hasDecimal = raw.includes('.');
+  const num = parseFloat(raw.replace(/[^\d.]/g, ''));
+  if (!Number.isFinite(num)) return false;
+  const flatMin = FLAT_MIN_PER_ROLL[stat];
+  return hasDecimal
+    || (flatMin != null && num < flatMin)
+    || (stat === 'Defense' && num < 5);
+}
+
 function extractSecondaries(lines, primary, fullText = '') {
   const found = [];
   const seen = new Set();
@@ -351,7 +370,13 @@ function extractSecondaries(lines, primary, fullText = '') {
   const secondaryIndex = findLineIndex(lines, lower => lower.includes('secondary stat'));
   const candidateLines = secondaryIndex === -1 ? lines : lines.slice(secondaryIndex + 1, secondaryIndex + 8);
 
-  candidateLines.forEach(line => {
+  candidateLines.forEach(rawLine => {
+    // OCR frequently swaps a leading "0" (zero) for "O" inside stat names
+    // — e.g. "(1) 27 0ffense" for Offense. Patch the two common cases
+    // (0ffense, 0ffense%) so the regex alternations below can match.
+    // Scoped to zeros that sit at a word boundary followed by letters, so
+    // leading digits in values like "27" or "(1)" stay untouched.
+    const line = String(rawLine || '').replace(/(^|\s|\()0(?=[A-Za-z])/g, '$1O');
     const lower = line.toLowerCase();
     if (lower.includes('primary')) return;
     if (lower.includes('set bonus')) return;
@@ -417,8 +442,16 @@ function extractSecondaries(lines, primary, fullText = '') {
     }
 
     lineMatches.forEach(({ stat, value }) => {
-      if (!stat || !value || seen.has(stat)) return;
-      if (stat.toLowerCase() === primaryKey) return;
+      if (!stat || !value) return;
+
+      // Dedup key accounts for the flat-to-% promotion that runs later.
+      // Without this, a flat "Health 592" line consumes the "Health" slot
+      // in `seen` and the next line's "1.04% Health" (which would promote
+      // to Health%) gets dropped as a duplicate. Keying by the future
+      // canonical name lets both variants coexist.
+      const canonStat = willPromoteToPercent(stat, value) ? `${stat}%` : stat;
+      if (seen.has(canonStat)) return;
+      if (canonStat.toLowerCase() === primaryKey) return;
 
       // Prefer the entry that carries an explicit roll count — the three
       // patterns above can all match the same line, and valueFirstPattern
@@ -427,7 +460,7 @@ function extractSecondaries(lines, primary, fullText = '') {
       const withRolls = lineMatches.find(
         item => item.stat === stat && Number.isFinite(item.rolls),
       );
-      seen.add(stat);
+      seen.add(canonStat);
       found.push({
         stat,
         value,
@@ -481,26 +514,12 @@ function extractSecondaries(lines, primary, fullText = '') {
 
   // OCR often drops the trailing "%" on percentage secondaries, so a value
   // like "+1.25% Offense" comes through as "+1.25 Offense" and gets routed
-  // to the flat stat. Promote back to the % variant when the numeric value
-  // is too small to be a plausible flat roll, or when it carries a decimal
-  // (flat rolls are integers for every affected stat).
-  const FLAT_MIN_PER_ROLL = {
-    Offense: 22,
-    Health: 200,
-    Protection: 400,
-  };
+  // to the flat stat. Promote back to the % variant when willPromoteToPercent
+  // says the value is too small / decimal / explicitly %-suffixed.
   found.forEach(item => {
     if (item.hidden || !item.stat || !item.value) return;
-    if (!(item.stat in FLAT_MIN_PER_ROLL) && item.stat !== 'Defense') return;
+    if (!willPromoteToPercent(item.stat, item.value)) return;
     const raw = String(item.value);
-    const hasDecimal = raw.includes('.');
-    const num = parseFloat(raw.replace(/[^\d.]/g, ''));
-    if (!Number.isFinite(num)) return;
-    const flatMin = FLAT_MIN_PER_ROLL[item.stat];
-    const shouldPromote = hasDecimal
-      || (flatMin != null && num < flatMin)
-      || (item.stat === 'Defense' && num < 5);
-    if (!shouldPromote) return;
     item.stat = `${item.stat}%`;
     if (!raw.includes('%')) item.value = `${raw}%`;
   });
@@ -604,6 +623,21 @@ function buildAnalysisResult({
 // yet, so this always maps to the 5-dot tier — user taps 6E manually.
 function extractModTier(text, lines) {
   if (!text) return null;
+  // Standalone tier letter above the "PRIMARY STAT" header. The mod card's
+  // tier frame OCRs as a bare A-E on its own line — no digit, no banner —
+  // so none of the level/badge patterns fire. Scoping to lines before the
+  // primary-stat landmark keeps this from false-matching on stat letters
+  // that appear later in the card.
+  if (Array.isArray(lines)) {
+    const primaryIdx = lines.findIndex(l => /primary\s*stat/i.test(String(l || '')));
+    if (primaryIdx > 0) {
+      for (let i = 0; i < primaryIdx; i++) {
+        const trimmed = String(lines[i] || '').trim();
+        const solo = trimmed.match(/^([A-E])$/);
+        if (solo) return `5${solo[1].toUpperCase()}`;
+      }
+    }
+  }
   // Explicit "Tier X" label
   const tierTag = text.match(/\btier\s*([A-E])\b/i);
   if (tierTag) return `5${tierTag[1].toUpperCase()}`;

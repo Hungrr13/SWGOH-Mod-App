@@ -207,12 +207,18 @@ export function buildOverlayRecommendation(parsed, options = {}) {
     .filter(Boolean)
     .join(' • ');
 
+  const plan = result.ladderPlan;
+  const title = plan?.label
+    ? `${plan.label} · ${result.finalScore}/100`
+    : `${result.decision} ${result.finalScore}/100`;
+  const verdictLine = plan?.desc || decisionDefinition(result.decision);
+
   return {
-    title: `${result.decision} ${result.finalScore}/100`,
+    title,
     body: [
       shell,
       topNames ? `Best: ${topNames}` : null,
-      decisionDefinition(result.decision),
+      verdictLine,
     ].filter(Boolean).join('\n'),
   };
 }
@@ -290,13 +296,16 @@ export function buildOverlayRecommendations(parsed, options = {}) {
     ? 'Level this mod to 12 and rescan for slice advice.'
     : 'Every visible secondary still at (1) — level the mod to 12 and rescan for slice advice.';
 
+  const plan = result.ladderPlan;
   const sliceTitle = noUsers
     ? 'SELL'
     : needsLevel
       ? 'Level Mod First'
       : secondaries.length < 2
         ? 'Shell Match'
-        : `${result.decision} ${result.finalScore}/100`;
+        : plan?.label
+          ? `${plan.label} · ${result.finalScore}/100`
+          : `${result.decision} ${result.finalScore}/100`;
   const sliceBody = noUsers
     ? [shell, 'No characters want this shell.'].filter(Boolean).join('\n')
     : needsLevel
@@ -305,7 +314,7 @@ export function buildOverlayRecommendations(parsed, options = {}) {
         ? [shell, 'Need 2+ clear secondaries for slice value.'].filter(Boolean).join('\n')
         : [
             shell,
-            decisionDefinition(result.decision),
+            plan?.desc || decisionDefinition(result.decision),
           ].filter(Boolean).join('\n');
 
   const charBody = topMatches.length

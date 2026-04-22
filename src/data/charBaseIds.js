@@ -78,7 +78,7 @@ export const CHAR_BASE_IDS = {
   "Commander Luke Skywalker": "COMMANDERLUKESKYWALKER",
   "Coruscant Underworld Police": "CORUSCANTUNDERWORLDPOLICE",
   "Count Dooku": "COUNTDOOKU",
-  "Crosshair (Scarred)": "CROSSHAIRSCARRED",
+  "Crosshair (Scarred)": "CROSSHAIRS3",
   "Dark Trooper": "DARKTROOPER",
   "Dark Trooper Moff Gideon": "MOFFGIDEONS3",
   "Darth Bane": "DARTHBANE",
