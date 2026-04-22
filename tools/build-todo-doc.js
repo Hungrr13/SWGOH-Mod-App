@@ -272,10 +272,10 @@ const rows = [
     'extractModTier() in modCaptureParser.js has patterns for Tier C / LVL 15 \u00B7 C / Level 15 A / the ^([A-E])\\s+\\(\\d+\\) stuck-tier fallback, but on-device captures still miss the letter on some cards. Collect fresh ocr-debug-last.txt dumps for each of 5E/5D/5C/5B/5A and audit which patterns are firing (or failing) per tier. Likely need: more tolerant spacing/punctuation between \u201CLVL 15\u201D and the letter, separate pattern for each tier\u2019s actual on-card layout, and possibly a bounded region scan instead of full-text regex. Related: native tier-color detection would eliminate this dependency entirely.',
   ),
   todoRow(
-    'OPEN',
+    'DONE',
     'Slice engine / missed-speed recovery',
-    'Investigate: should we recommend slicing B\u2192A if the user has missed speed roll every other slice so far?',
-    'Current ladder logic evaluates each tier step independently based on current rolls + priority-stat fit. A mod at 5B with Speed at 1 roll despite being through 4 tier slices (5E\u21925D\u21925C\u21925B) has a pattern \u2014 missed the 1/4 shot at Speed three times in a row. Statistically the 5B\u21925A slice still has ~25% odds (independent roll), so pure probability says nothing changed. But from a user-psychology / sunk-cost standpoint, and given that Speed is the only secondary that truly matters long-term, there\u2019s an argument for encouraging one more attempt at 5B\u21925A. Counter-argument: that\u2019s gambler\u2019s-fallacy territory and mats are scarce. Decision needed: do we add a \u201Ccatalyst-streak\u201D heuristic in sliceEngine.js that nudges toward one more slice after N consecutive missed Speed rolls, or do we leave the engine purely odds-based and let the user decide? Either way, the recommendation copy on SLICE_NEXT should probably call out the current Speed-roll count explicitly so users see the pattern.',
+    'Decided against a \u201Ccatalyst-streak\u201D nudge: slicing a low-Speed mod on streak logic would waste mats.',
+    'A mod with Speed missed 3\u00D7 is probably sitting at 3\u20135 Speed, and one more 25% hit still doesn\u2019t clear the keeper threshold (~10+). The only case where an extra slice helps is when current Speed is already \u226510 and one more roll locks it in \u2014 and the ladder already covers that via SLICE_NEXT on high-Speed partials. No new heuristic needed; archive.',
   ),
   todoRow(
     'OPEN',
@@ -344,10 +344,10 @@ const rows = [
     'compareScannedVsEquipped() in sliceEngine.js:1130 scores both mods against the match priorities, then returns verdict (rawDelta>4 Upgrade, <-6 Downgrade, else Sidegrade), scoreDelta, and per-priority stat deltas for the badge label. Archive on next sweep.',
   ),
   todoRow(
-    'OPEN',
+    'DONE',
     'Permissions UX',
-    'Screen Capture row in the in-app permissions list stays on "Not approved" even after the user has granted MediaProjection and a successful scan',
-    'Cosmetic only \u2014 scans work. The permissions panel isn\u2019t observing MediaProjection state. Likely fix: subscribe to ModOverlayCaptureModule status changes (or re-poll on resume) so the row flips to Granted after the user completes the system consent dialog.',
+    'Screen Capture row now reflects MediaProjection grant after a successful scan',
+    'User-verified on the 2026-04-22 install. Resolved without a targeted code change \u2014 likely fell out of the capture/recommendation plumbing refresh in the same build. Archive on next sweep.',
   ),
   todoRow(
     'OPEN',
