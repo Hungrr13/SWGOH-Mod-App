@@ -111,6 +111,11 @@ This is the current repo map after the cleanup pass. If you are not sure where t
 
 ## Recent changes (April 2026)
 
+### GAC screen: Attack/Defense toggle respects role when no roster is loaded
+- With no roster linked, `GacScreen.squadsToShow` returned `payload.squads.slice(0, 30)` regardless of which toggle was selected. The worker concatenates defense squads first, then offense, so the unfiltered top 30 was always all defenders — Attack mode showed Jabba/Lord Vader/Rey leads with empty win% fields (offenseWinRate is null on defense rows and vice versa).
+- Fix in `src/screens/GacScreen.js`: the no-roster branch now filters `payload.squads` by `sq.role === role` and sorts by the matching win-rate metric (`offenseWinRate` for Attack, `defenseWinRate` for Defense). The result is wrapped in `{ squad, ownedCount: null, coverage: null }` so the render code's existing `item.squad || item` fallback keeps working unchanged.
+- After install: Attack with no roster shows Sith Eternal 96% / Malgus trios 93% / etc. matching the swgoh.gg `?perspective=attack&sort=percent` page. Defense continues to show Jabba 27% / Queen Amidala 17% / etc.
+
 ### GAC worker: scrape both attack and defense perspectives of /gac/squads/
 - Problem: GAC Meta tab was empty on the Offense toggle for both 3v3 and 5v5. Client was receiving squads, but every entry had `offenseWinRate: null` so `recommendSquads().offense` returned an empty bucket.
 - Investigation found swgoh.gg's `/gac/squads/` page takes a `perspective` query param. Default (no param) returns top **defensive** squads sorted by Hold % — "squads left on defense and how often they hold". `?perspective=attack&sort=percent` returns a completely different list: top **attacking** squads sorted by Win % — "squads players actually run to attack and how often they win". Neither is derivable from the other (e.g. top attacker is `SITHPALPATINE` solo at 96%; top defender is `JABBATHEHUTT + BOUSHH + KRRSANTAN` at 27% hold). Early attempts to derive offense as `1 - holdPct` produced wrong rankings.

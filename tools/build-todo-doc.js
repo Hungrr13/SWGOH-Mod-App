@@ -243,6 +243,12 @@ const rows = [
   ),
   todoRow(
     'DONE',
+    'GAC screen / no-roster toggle filter',
+    'Attack/Defense toggle now shows the right squads when no roster is linked',
+    'Previously GacScreen.squadsToShow returned payload.squads.slice(0,30) when hasRoster was false \u2014 worker concatenates defense first, then offense, so the unfiltered top 30 was always all defenders, and the Attack toggle showed Jabba/LV/Rey leads with empty win% (offenseWinRate is null on defense rows). No-roster branch now filters by sq.role === role and sorts by the matching win-rate metric. Wrapped in {squad, ownedCount: null, coverage: null} so the render code\u2019s existing item.squad || item fallback keeps working. After install: Attack shows Sith Eternal 96% / Malgus trios 93% / etc. matching swgoh.gg.',
+  ),
+  todoRow(
+    'DONE',
     'GAC worker / attack + defense perspectives',
     'Scrape both perspectives of /gac/squads/ so Offense shows real top attackers (not inverse of defense holds)',
     'swgoh.gg\u2019s /gac/squads/ page takes a ?perspective=attack&sort=percent query param that returns a completely different list (top attacking squads sorted by Win %) than the default defense view (top defenders sorted by Hold %). Top attacker (SITHPALPATINE solo, 96%) is not derivable from top defender (JABBATHEHUTT+BOUSHH+KRRSANTAN 27% hold) \u2014 they\u2019re independent datasets. scrapeGacSquads now fetches both perspectives in parallel, parses each through parseGacSquadsHtml(html, role), and emits squads tagged with the appropriate role and single populated win-rate field. Attack view legitimately includes 1-member solo squads so bracket detection runs off the defense view only. Deployed. Verified: /?gac=3v3 returns 87 squads (42 def + 45 off); /?gac=5v5 returns 70 (37 def + 33 off).',
