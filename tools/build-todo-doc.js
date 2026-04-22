@@ -255,6 +255,18 @@ const rows = [
   ),
   todoRow(
     'OPEN',
+    'Slice tab / incomplete secondary transfer',
+    'Not all secondaries from the scan are making it to the Slice tab \u2014 some mods come through with missing rows',
+    'Separate from the tier-letter OCR issue. Even when the tier is picked up correctly, some scans lose one or more secondaries on the handoff from parser \u2192 App.js slicePrefill \u2192 SliceScreen. Could be: (a) a regex in extractSecondaries dropping a row whose stat name has unusual spacing/OCR noise, (b) the primary-dedup backstop added last session filtering too aggressively when a flat stat shares a name with the primary, (c) slice(0, 4) capping before a real 4th secondary is seen because a phantom row snuck in earlier. Plan: collect a fresh ocr-debug-last.txt for a mod where a secondary is missing, trace through parser step-by-step against that dump, and compare parsed.secondaries vs. the on-card text.',
+  ),
+  todoRow(
+    'OPEN',
+    'GAC tab / roster vs meta view toggle',
+    'Add a second display mode that shows all meta squads regardless of roster coverage',
+    'Current GAC Meta tab filters to squads where the user owns \u226560% of members (MIN_COVERAGE in gacMetaService.js). That\u2019s the right default for \u201Cwhat can I actually field\u201D. Add a second toggle (alongside Attack/Defense) that shows the raw top meta regardless of what\u2019s owned \u2014 useful for players who want to see what to strive for / farm toward. Implementation: a pill toggle \u201CMine / All\u201D in GacScreen.js that swaps between ranked.offense/ranked.defense (current) and a role-filtered sort of payload.squads (no coverage gate). Missing members should still render red chips so users can see what they\u2019d need. Preserve the existing \u201Cno roster linked\u201D fallback as a special case of the \u201CAll\u201D mode.',
+  ),
+  todoRow(
+    'OPEN',
     'Scanner / tier OCR incomplete coverage',
     'Scans aren\u2019t reliably grabbing all tier levels (D, C, B, A, etc.) \u2014 some mods come through with tier blank or wrong',
     'extractModTier() in modCaptureParser.js has patterns for Tier C / LVL 15 \u00B7 C / Level 15 A / the ^([A-E])\\s+\\(\\d+\\) stuck-tier fallback, but on-device captures still miss the letter on some cards. Collect fresh ocr-debug-last.txt dumps for each of 5E/5D/5C/5B/5A and audit which patterns are firing (or failing) per tier. Likely need: more tolerant spacing/punctuation between \u201CLVL 15\u201D and the letter, separate pattern for each tier\u2019s actual on-card layout, and possibly a bounded region scan instead of full-text regex. Related: native tier-color detection would eliminate this dependency entirely.',
