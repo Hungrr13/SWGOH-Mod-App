@@ -1,7 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useAppTheme } from '../theme/appTheme';
 import { getAdUnitId } from '../config/adsConfig';
+import * as premiumState from '../services/premiumState';
 
 // Keep ads out of development/dev-client startup so native event emitters
 // from the ads package do not crash the app before JS finishes loading.
@@ -30,6 +31,14 @@ function PlaceholderBanner() {
 export default function AdBanner() {
   const theme = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const [premium, setPremium] = useState(() => premiumState.getSnapshot());
+
+  useEffect(() => {
+    setPremium(premiumState.getSnapshot());
+    return premiumState.subscribe(setPremium);
+  }, []);
+
+  if (premium.isPremium) return null;
 
   if (!ADS_ENABLED) {
     return <PlaceholderBanner />;
