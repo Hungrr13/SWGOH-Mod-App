@@ -107,6 +107,7 @@ export function buildOverlayRecommendation(parsed, options = {}) {
   const shape = parsed?.modShape;
   const primary = parsed?.primary;
   const modSet = parsed?.modSet && parsed.modSet !== 'Not found' ? parsed.modSet : '';
+  const tier = parsed?.modTier || null;
   const chars = pickChars(options.ownedBaseIds);
 
   if (!shape || shape === 'Not found' || !primary || primary === 'Not found') {
@@ -142,6 +143,7 @@ export function buildOverlayRecommendation(parsed, options = {}) {
       primary,
       modSet,
       secondaries: [],
+      tier,
     });
     const likelyUsers = shellOnly.matchedCharacters
       .slice(0, 4)
@@ -171,6 +173,7 @@ export function buildOverlayRecommendation(parsed, options = {}) {
       primary,
       modSet,
       secondaries: [],
+      tier,
     });
     const likelyUsers = shellOnly.matchedCharacters
       .slice(0, 4)
@@ -196,6 +199,7 @@ export function buildOverlayRecommendation(parsed, options = {}) {
     primary,
     modSet,
     secondaries,
+    tier,
   });
 
   const topNames = result.matchedCharacters
@@ -253,6 +257,7 @@ export function buildOverlayRecommendations(parsed, options = {}) {
   const shape = parsed?.modShape;
   const primary = parsed?.primary;
   const modSet = parsed?.modSet && parsed.modSet !== 'Not found' ? parsed.modSet : '';
+  const tier = parsed?.modTier || null;
   const chars = pickChars(options.ownedBaseIds);
 
   if (!shape || shape === 'Not found' || !primary || primary === 'Not found') {
@@ -278,6 +283,7 @@ export function buildOverlayRecommendations(parsed, options = {}) {
     primary,
     modSet,
     secondaries,
+    tier,
   });
 
   const topMatches = result.matchedCharacters.slice(0, 20);

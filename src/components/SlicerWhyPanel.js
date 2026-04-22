@@ -30,6 +30,7 @@ export default function SlicerWhyPanel({ result, secRows = [] }) {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [premium, setPremium] = useState(() => premiumState.getSnapshot());
   const [busy, setBusy] = useState(false);
+  const [perSecOpen, setPerSecOpen] = useState(false);
 
   useEffect(() => {
     setPremium(premiumState.getSnapshot());
@@ -114,8 +115,15 @@ export default function SlicerWhyPanel({ result, secRows = [] }) {
 
       {result.scoredStats?.length ? (
         <>
-          <Text style={[styles.cardTitle, { marginTop: 10 }]}>Per-Secondary</Text>
-          {result.scoredStats.map((s, i) => {
+          <TouchableOpacity
+            style={styles.perSecHeader}
+            onPress={() => setPerSecOpen(v => !v)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.cardTitle}>Per-Secondary</Text>
+            <Text style={styles.perSecChevron}>{perSecOpen ? '▾' : '▸'}</Text>
+          </TouchableOpacity>
+          {perSecOpen && result.scoredStats.map((s, i) => {
             const row = secRows.find(r => r.stat === s.name);
             return (
               <View key={i} style={styles.statRow}>
@@ -194,6 +202,18 @@ const createStyles = colors => StyleSheet.create({
     paddingVertical: 4,
     borderTopWidth: 1,
     borderTopColor: colors.border,
+  },
+  perSecHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    paddingVertical: 4,
+  },
+  perSecChevron: {
+    color: colors.muted,
+    fontSize: 14,
+    fontWeight: '700',
   },
   statRowHead: {
     flexDirection: 'row',

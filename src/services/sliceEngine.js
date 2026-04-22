@@ -905,14 +905,16 @@ function getNextHitNarrative(scoredStats) {
     };
   }
 
-  // Both best and worst weigh "how much the character wants it" × "how much
-  // remaining ceiling the stat has". Without the upsidePct factor, worst
-  // picked whichever stat had the lowest character-want score — which
-  // flagged Defense% instead of the low-ceiling flat stats (flat Health,
-  // flat Offense) that are actually the worst next-hit outcomes.
+  // Best-case: stat the character wants most that still has ceiling to grow.
+  // Worst-case: flat stats that don't match a character's build (isFlatTieBreaker)
+  // are *always* the worst next-hit outcome because their ceiling is tiny and
+  // doesn't scale with %-based character stats. Only fall back to the
+  // lowest-weight secondary when no such flat stats are present.
   const score = s => s.targetWeight * s.upsidePct;
   const best = scoredStats.reduce((a, b) => (score(b) > score(a) ? b : a));
-  const worst = scoredStats.reduce((a, b) => (score(b) < score(a) ? b : a));
+  const flatPool = scoredStats.filter(s => s.isFlatTieBreaker);
+  const worstPool = flatPool.length ? flatPool : scoredStats;
+  const worst = worstPool.reduce((a, b) => (score(b) < score(a) ? b : a));
 
   return {
     bestCase: `Next hit lands on ${best.name}.`,
