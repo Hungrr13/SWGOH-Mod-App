@@ -255,6 +255,18 @@ const rows = [
   ),
   todoRow(
     'OPEN',
+    'Scanner / tier OCR incomplete coverage',
+    'Scans aren\u2019t reliably grabbing all tier levels (D, C, B, A, etc.) \u2014 some mods come through with tier blank or wrong',
+    'extractModTier() in modCaptureParser.js has patterns for Tier C / LVL 15 \u00B7 C / Level 15 A / the ^([A-E])\\s+\\(\\d+\\) stuck-tier fallback, but on-device captures still miss the letter on some cards. Collect fresh ocr-debug-last.txt dumps for each of 5E/5D/5C/5B/5A and audit which patterns are firing (or failing) per tier. Likely need: more tolerant spacing/punctuation between \u201CLVL 15\u201D and the letter, separate pattern for each tier\u2019s actual on-card layout, and possibly a bounded region scan instead of full-text regex. Related: native tier-color detection would eliminate this dependency entirely.',
+  ),
+  todoRow(
+    'OPEN',
+    'Slice engine / missed-speed recovery',
+    'Investigate: should we recommend slicing B\u2192A if the user has missed speed roll every other slice so far?',
+    'Current ladder logic evaluates each tier step independently based on current rolls + priority-stat fit. A mod at 5B with Speed at 1 roll despite being through 4 tier slices (5E\u21925D\u21925C\u21925B) has a pattern \u2014 missed the 1/4 shot at Speed three times in a row. Statistically the 5B\u21925A slice still has ~25% odds (independent roll), so pure probability says nothing changed. But from a user-psychology / sunk-cost standpoint, and given that Speed is the only secondary that truly matters long-term, there\u2019s an argument for encouraging one more attempt at 5B\u21925A. Counter-argument: that\u2019s gambler\u2019s-fallacy territory and mats are scarce. Decision needed: do we add a \u201Ccatalyst-streak\u201D heuristic in sliceEngine.js that nudges toward one more slice after N consecutive missed Speed rolls, or do we leave the engine purely odds-based and let the user decide? Either way, the recommendation copy on SLICE_NEXT should probably call out the current Speed-roll count explicitly so users see the pattern.',
+  ),
+  todoRow(
+    'OPEN',
     'Scanner / native tier-color detection',
     'Detect mod tier from frame color in the native classifier (E=gray, D=green, C=blue, B=purple, A=gold) + detect 6-dot vs 5-dot from pips',
     'Complement to the OCR-based tier extractor. Native pixel sampling on the mod frame would be more reliable than OCR and would unlock 6E detection. Add to ModIconClassifier.kt, wire through ModOverlayCaptureService.kt \u2192 JS bridge \u2192 parsed.modTier fallback.',
