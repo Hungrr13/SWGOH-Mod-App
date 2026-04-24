@@ -245,10 +245,13 @@ export default function OverlayCaptureScreen({ onBack, onUseInFinder, onUseInSli
       if (!nextStatus.overlayPermissionGranted) {
         const proceed = await confirmRationale(
           'Display Over Other Apps',
-          'ModForge needs to draw a small scan bubble on top of Star Wars: ' +
-            'Galaxy of Heroes so you can tap it while a mod is open. ' +
-            'It does not read other apps\u2019 content or simulate input. ' +
-            'Continue to grant the permission in Android Settings?'
+          'ModForge draws one small scan button on top of Star Wars: Galaxy ' +
+            'of Heroes so you can tap it while viewing a mod.\n\n' +
+            '\u2022 The button only acts when you tap it\u2014nothing runs automatically.\n' +
+            '\u2022 ModForge does not read other apps\u2019 content, does not simulate ' +
+            'taps, and does not send input to SWGOH.\n' +
+            '\u2022 You can dismiss the button anytime from the Scanner tab.\n\n' +
+            'Continue to grant \u201CDisplay over other apps\u201D in Android Settings?'
         );
         if (!proceed) {
           pendingStartRef.current = false;
@@ -266,9 +269,13 @@ export default function OverlayCaptureScreen({ onBack, onUseInFinder, onUseInSli
       if (!nextStatus.screenCaptureReady) {
         const proceed = await confirmRationale(
           'Capture Screen To Read Mod',
-          'When you tap the bubble, ModForge takes one screenshot of the ' +
-            'mod inspect screen, reads the set / shape / stats locally on ' +
-            'your device, then discards the image. Nothing is uploaded. ' +
+          'When you tap the scan button, ModForge captures one screenshot of ' +
+            'the mod inspect screen.\n\n' +
+            '\u2022 Capture is user-initiated only\u2014nothing is recorded in the ' +
+            'background.\n' +
+            '\u2022 The set / shape / stats are read on-device. The image is ' +
+            'discarded immediately after parsing and never leaves your phone.\n' +
+            '\u2022 No automation, no ad tracking, no cloud upload.\n\n' +
             'Continue to grant screen capture?'
         );
         if (!proceed) {

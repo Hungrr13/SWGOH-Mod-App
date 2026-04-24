@@ -176,10 +176,10 @@ const rows = [
     'Core functionality: overlay button over SWGOH to scan the user\u2019s own mod inventory. User benefit: catalog mods without manual typing. Why no alternative: user must interact with game while app is visible \u2014 impossible without overlay. Play Console blocks the upload until this form is completed.',
   ),
   todoRow(
-    'OPEN',
+    'DONE',
     'Launch / permissions UX',
-    'Show in-app rationale dialog BEFORE opening Settings.ACTION_MANAGE_OVERLAY_PERMISSION',
-    'Play reviewers actively test for this. Alert must explain: the app draws a small scan button over other apps, does NOT read other apps\u2019 content, does NOT simulate input, only captures screen when user taps the button. Apps that jump straight to the system dialog get rejected. Same treatment needed before the MediaProjection consent dialog.',
+    'Rationale alerts now fire before both SYSTEM_ALERT_WINDOW and MediaProjection prompts, with Play-reviewer-friendly copy',
+    'OverlayCaptureScreen.runStartFlow() wraps both permission grants in confirmRationale() with bullet-pointed explanations. Overlay dialog calls out: user-initiated only, no content reading from other apps, no input simulation. Capture dialog calls out: user-initiated only, on-device parsing, image discarded immediately, no cloud/ad upload. Archive on next sweep.',
   ),
   todoRow(
     'OPEN',
@@ -188,10 +188,10 @@ const rows = [
     'Data collected = "App activity" (scanned mod data stored locally); shared = None; security = user can delete data. Google audits and pulls apps that misrepresent. Description must explicitly acknowledge screen capture to match this form.',
   ),
   todoRow(
-    'OPEN',
+    'DONE',
     'Launch / manifest',
-    'Declare FOREGROUND_SERVICE + FOREGROUND_SERVICE_MEDIA_PROJECTION and mark the overlay/capture service with android:foregroundServiceType="mediaProjection"',
-    'Android 14+ requires this pair for screen-capture foreground services. Separate Play Console declaration under App content \u2192 Foreground services also required with justification.',
+    'FOREGROUND_SERVICE + FOREGROUND_SERVICE_MEDIA_PROJECTION permissions declared; capture service flagged with android:foregroundServiceType="specialUse|mediaProjection"',
+    'AndroidManifest.xml already has the pair plus FOREGROUND_SERVICE_SPECIAL_USE; ModOverlayCaptureService declared with foregroundServiceType="specialUse|mediaProjection" and a PROPERTY_SPECIAL_USE_FGS_SUBTYPE of "overlay_capture_mod_scanner". Still pending on the Play side: the separate App-content \u2192 Foreground services declaration form. Archive on next sweep.',
   ),
   todoRow(
     'OPEN',
