@@ -92,10 +92,10 @@ const rows = [
     'See shape-classifier-candidate-inner-mask.png from the Apr 20 Circle scan.',
   ),
   todoRow(
-    'IN PROGRESS',
+    'DONE',
     'Tooling / debug',
-    'Pull-debug workflow keeps breaking Claude when large shape PNGs get sampled \u2014 add size cap / text-first flow',
-    'Shape classifier now writes debug to <getExternalFilesDir>/overlay-debug. Next: update pull_debug.ps1 to always grab the .txt first + downscale PNGs before they land in tools/debug_out/, so Claude never reads raw 100KB+ crops.',
+    'pull_debug.ps1 now downscales PNGs to a 400px longest edge before writing to tools/debug_out/',
+    'Text debug was already pulled first. Added a System.Drawing bicubic downscale step in Pull-SafePng that runs after the magic-byte guard and before the final Move-Item. Typical classifier crops drop from ~100KB to ~20\u201340KB, which keeps Claude\u2019s Read tool happy. -Full switch bypasses the downscale when native-resolution is actually needed. Archive on next sweep.',
   ),
   todoRow(
     'DONE',

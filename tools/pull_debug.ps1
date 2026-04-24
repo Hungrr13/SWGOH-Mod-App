@@ -1,6 +1,7 @@
 param(
   [switch]$Png,    # include PNG artifacts (classifier masks, overlays, crops)
-  [switch]$All     # also pull per-scan focused/stats/shape/icon/set PNGs
+  [switch]$All,    # also pull per-scan focused/stats/shape/icon/set PNGs
+  [switch]$Full    # skip the downscale step — keep PNGs at native resolution
 )
 
 $ErrorActionPreference = 'Continue'
@@ -15,6 +16,39 @@ New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 # or aborted pulls have repeatedly broken Claude sessions on replay.
 $MinPngBytes = 500
 $PngMagic = [byte[]](0x89, 0x50, 0x4E, 0x47)
+
+# Downscale target. Claude's Read tool chokes on ~100KB+ PNGs. Capping the
+# longest edge at 400px keeps a classifier crop ~20-40KB while preserving
+# enough detail to eyeball shape/mask decisions. Use -Full to bypass.
+$MaxEdgePx = 400
+
+Add-Type -AssemblyName System.Drawing
+
+function Shrink-Png {
+  param([string]$Path)
+  try {
+    $src = [System.Drawing.Image]::FromFile($Path)
+    $w = $src.Width; $h = $src.Height
+    $longest = [Math]::Max($w, $h)
+    if ($longest -le $MaxEdgePx) { $src.Dispose(); return $false }
+    $scale = $MaxEdgePx / $longest
+    $nw = [int][Math]::Round($w * $scale)
+    $nh = [int][Math]::Round($h * $scale)
+    $dst = New-Object System.Drawing.Bitmap $nw, $nh
+    $g = [System.Drawing.Graphics]::FromImage($dst)
+    $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $g.DrawImage($src, 0, 0, $nw, $nh)
+    $g.Dispose()
+    $src.Dispose()
+    $tmp = "$Path.resized"
+    $dst.Save($tmp, [System.Drawing.Imaging.ImageFormat]::Png)
+    $dst.Dispose()
+    Move-Item -Force $tmp $Path
+    return $true
+  } catch {
+    return $false
+  }
+}
 
 function Pull-SafePng {
   param([string]$RemotePath, [string]$LocalPath)
@@ -36,7 +70,16 @@ function Pull-SafePng {
     return 'skip(badmagic)'
   }
   Move-Item -Force $tmp $LocalPath
-  return "ok($($info.Length)b)"
+  $origBytes = $info.Length
+  $resized = $false
+  if (-not $Full) {
+    $resized = Shrink-Png $LocalPath
+  }
+  $finalBytes = (Get-Item $LocalPath).Length
+  if ($resized) {
+    return "ok($origBytes`b->$finalBytes`b)"
+  }
+  return "ok($finalBytes`b)"
 }
 
 # Always pull the text debug first. This is the cheap, safe view.
