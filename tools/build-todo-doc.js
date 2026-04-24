@@ -122,10 +122,10 @@ const rows = [
     'Two-card row. "Your Characters" populated from ally-code roster; gated behind premium.',
   ),
   todoRow(
-    'OPEN',
+    'DONE',
     'Slice screen / suggestions',
-    'Reduce total number of suggested characters \u2014 140 is too high',
-    'Pick a sane cap (e.g. top 20\u201330 by fit score) and sort by best match.',
+    'Capped Best Characters + Your Roster to top 25 by fit score',
+    'SliceScreen slices setFilteredMatches and ownedMatches to MAX_VISIBLE_MATCHES=25. matchedCharacters is already sorted desc by matchScore so the cap surfaces the strongest fits. Headers show \u201CTop 25 of N\u201D when truncated, plain \u201CN\u201D otherwise. Archive on next sweep.',
   ),
   todoRow(
     'DONE',

@@ -523,11 +523,17 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
               // When the user specifies a mod set, only surface characters whose
               // build uses that set. c.set is the decoded string like
               // "Defense(x4)+Health(x2)" and the selector is a bare name.
-              const setFilteredMatches = modSet
+              const setFilteredMatchesAll = modSet
                 ? result.matchedCharacters.filter(c => c.set && c.set.includes(modSet))
                 : result.matchedCharacters;
+              // Cap to the top fits so the list stays scannable. matchedCharacters
+              // is already sorted desc by matchScore, so slicing is safe.
+              const MAX_VISIBLE_MATCHES = 25;
+              const setFilteredMatches = setFilteredMatchesAll.slice(0, MAX_VISIBLE_MATCHES);
               const topScore = setFilteredMatches[0]?.matchScore ?? 0;
-              const ownedMatches = setFilteredMatches.filter(c => isOwnedChar(c.name));
+              const ownedMatches = setFilteredMatchesAll
+                .filter(c => isOwnedChar(c.name))
+                .slice(0, MAX_VISIBLE_MATCHES);
               const renderCharRow = (c, i, { compact = false } = {}) => {
                 const matchMeta = getMatchPresentation(c.matchScore, topScore, i);
                 const fillWidth = topScore > 0 ? `${Math.max(16, Math.round((c.matchScore / topScore) * 100))}%` : '16%';
@@ -705,6 +711,14 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
                 );
               };
 
+              const ownedTotal = setFilteredMatchesAll.filter(c => isOwnedChar(c.name)).length;
+              const ownedCountLabel = ownedTotal > ownedMatches.length
+                ? `Top ${ownedMatches.length} of ${ownedTotal}`
+                : `${ownedMatches.length}`;
+              const bestCountLabel = setFilteredMatchesAll.length > setFilteredMatches.length
+                ? `Top ${setFilteredMatches.length} of ${setFilteredMatchesAll.length}`
+                : `${setFilteredMatches.length}`;
+
               if (showYours) {
                 return (
                   <View style={styles.card}>
@@ -714,7 +728,7 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
                       activeOpacity={0.7}
                     >
                       <Text style={styles.cardTitle} numberOfLines={1}>
-                        Your Roster ({ownedMatches.length})
+                        Your Roster ({ownedCountLabel})
                       </Text>
                       <Text style={styles.chevron}>{charsExpanded ? '▲' : '▼'}</Text>
                     </TouchableOpacity>
@@ -735,7 +749,7 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
                     activeOpacity={0.7}
                   >
                     <Text style={styles.cardTitle}>
-                      Best Characters ({setFilteredMatches.length})
+                      Best Characters ({bestCountLabel})
                     </Text>
                     <Text style={styles.chevron}>{charsExpanded ? '▲' : '▼'}</Text>
                   </TouchableOpacity>
