@@ -111,10 +111,10 @@ const rows = [
     'Change captured in the staged diff for AllyCodePanel.js (489-758-819 \u2192 123-456-789). Archive on next sweep.',
   ),
   todoRow(
-    'OPEN',
+    'DONE',
     'Repo hygiene',
-    'Decide fate of references/mod-source-html/*_files/ (SWGOH.GG webpack bundles)',
-    'Carried over from READMEBEFOREEDITING.md follow-ups. Parsers never touch them; deleting would shrink repo meaningfully.',
+    'references/mod-source-html/*_files/ (SWGOH.GG webpack bundles) removed from working tree; not tracked in git on either branch',
+    'User confirmed external backup kept in case parsers ever need them. Verified on 2026-04-25: references/ contains only character-data, mod-source, and native-overlay-template; no _files/ subdirs anywhere; git ls-files references/mod-source-html returns 0 entries on both main and friendly-stonebraker. Archive on next sweep.',
   ),
   todoRow(
     'DONE',
@@ -373,6 +373,48 @@ const rows = [
     'Slice engine / 6-dot gate',
     'Tightened the 5A\u21926E gate: dropped the 2-roll \u201cspeedBacked\u201d path, added a Speed value floor of 14 to the 3-roll path, and unified overlay + slice-tab verdicts',
     'Previously a mod like Speed 10 \u00d7 2 rolls with mid-55% avgPriorityQuality would fire USABLE \u2192 6E; now it falls to SLICE_NEXT \u2192 5B (step-by-step). Added `speedVal >= 14` to `speedHitHard` so an unlucky 3-roll Speed that landed 9\u201313 doesn\u2019t slip through. overlayRecommendation.js now evaluates against the full DECODED_CHARS pool (matches SliceScreen) so roster-filter differences don\u2019t produce conflicting verdicts between the overlay and the Slice tab. Aligns with community guidance (\u201cSpeed \u226515 before 6-dot\u201d). GuideModal Slicer page + READMEBEFOREEDITING.md updated.',
+  ),
+  todoRow(
+    'DONE',
+    'Theme / persistence',
+    'Light/dark toggle now persists across app kill+reopen; loading screen waits on AsyncStorage hydration so returning users don\u2019t see a one-frame flash of the wrong theme',
+    'Refactored src/theme/appTheme.js to expose hydrateTheme() with a module-level cachedIsDark cache. App.js warm-up now awaits hydrateTheme() before dropping LoadingScreen. AppThemeProvider uses a lazy useState(() => cachedIsDark) initializer plus a useEffect that re-syncs to the LIVE cachedIsDark on remount instead of the stale promise-resolved value \u2014 fixes a regression where Android Activity recreation re-fired runApplication and clobbered toggles made earlier in the session. toggleTheme writes synchronously to cachedIsDark, then persists to AsyncStorage. Cold-start default remains dark for fresh installs (useState(true) before hydration completes). Verified on R5CX10W4LJY: toggle to light \u2192 swipe-from-recents to kill \u2192 reopen \u2192 still light. Commits 5e90623, 248b270, 44d5451.',
+  ),
+  todoRow(
+    'DONE',
+    'Premium / cold-start reconcile',
+    'Re-derive Premium from Google Play on every cold start instead of trusting the AsyncStorage cache (anti-tamper)',
+    'Added iap.reconcileWithPlay({ timeoutMs: 3000 }) to App.js warm-up sequence. Calls getAvailablePurchases through react-native-iap, filters to PREMIUM_SKU, and overwrites premiumState to match Google\u2019s source of truth. Behaviour: Play says owned \u2192 setPremium(true); Play says not owned \u2192 setPremium(false), revoking any cached unlock from a flipped AsyncStorage flag / sideloaded patched APK / refunded purchase; IAP unavailable / Play offline / query times out \u2192 leaves cache alone (don\u2019t punish offline users on flaky connections). Helper findVerifiedPremium() filters to verified-signature purchases when a Play license key is configured, falls open to first PREMIUM_SKU match when not. restorePurchases() also routes through findVerifiedPremium so manual restore reuses the same verification path.',
+  ),
+  todoRow(
+    'DONE',
+    'Premium / signature verification',
+    'Native Kotlin module verifies Google Play purchase signatures (RSA-SHA1) before unlocking Premium \u2014 rejects forged purchase events injected by Frida/Xposed hooks',
+    'New IapVerifierModule.kt + IapVerifierPackage.kt registered in MainApplication.kt. Module name ModForgeIapVerifier. Uses Signature.getInstance("SHA1withRSA") + X509EncodedKeySpec on the Play license public key, verifies against raw INAPP_PURCHASE_DATA UTF-8 bytes. Returns false on malformed Base64 (fail-closed). JS wrapper in src/services/iapVerifier.js handles dataAndroid/originalJson + signatureAndroid/signature field aliases. iap.purchaseUpdatedListener now calls verifyPurchase before setPremium(true); invalid signatures drop the event without finishTransaction so Play retries. NOTE: src/config/playLicense.js ships with PLAY_LICENSE_PUBLIC_KEY=\u2019\u2019 (empty) which fails open for dev/sideload builds \u2014 the empty key slot is documented in-file and must be populated from Play Console before the Play release build (see separate OPEN row).',
+  ),
+  todoRow(
+    'DONE',
+    'Premium / R8 + ProGuard',
+    'Enabled R8 minification + resource shrinking on release builds; native modules and IAP signature classes pinned via -keep rules',
+    'gradle.properties: android.enableMinifyInReleaseBuilds=true + android.enableShrinkResourcesInReleaseBuilds=true. proguard-rules.pro: -keep on com.hungrr13.modhelper.overlay.**, com.hungrr13.modhelper.iap.**, the @ReactMethod surface on ReactContextBaseJavaModule subclasses, plus java.security.** and javax.crypto.** so R8 doesn\u2019t strip the verifier\u2019s reflection targets. Hermes JS bytecode (already enabled) covers the JS bundle. Slows reverse-engineering of the Kotlin overlay/IAP-verifier modules and strips debug symbols. R8 build is currently failing on missing-class warnings from the Google Mobile Ads SDK \u2014 see separate BLOCKED row.',
+  ),
+  todoRow(
+    'OPEN',
+    'Premium / react-native-iap dependency',
+    'Install react-native-iap as a real dependency before Play release \u2014 without it, the entire IAP hardening pipeline is inert',
+    'src/services/iap.js does a lazy require(\u2018react-native-iap\u2019) wrapped in try/catch that returns null when the module is missing. Verified on 2026-04-25: react-native-iap is not in package.json and not installed in node_modules, so iap.isAvailable() returns false, reconcileWithPlay() returns {ok:false, reason:\u2019iap-unavailable\u2019} immediately, and the native ModForgeIapVerifier is unreachable. The hardening (cold-start reconcile + RSA-SHA1 signature verification) only activates once react-native-iap is installed and Play Billing v6+ is wired in MainActivity. Plan: npx expo install react-native-iap (v12+ for the requestPurchase({skus:[]}) shape iap.js already uses), add the BILLING permission to AndroidManifest.xml if expo doesn\u2019t add it automatically, build a fresh release APK, and validate the listener path with a real Play Console internal-test purchase. Until then, premium state is purely AsyncStorage-driven on Android.',
+  ),
+  todoRow(
+    'OPEN',
+    'Premium / Play License key',
+    'Populate PLAY_LICENSE_PUBLIC_KEY in src/config/playLicense.js before producing the Play release build',
+    'Empty string ships by default. iapVerifier.isConfigured() returns false on empty, which causes the purchase listener and reconcileWithPlay to FAIL OPEN (trust any purchase event for PREMIUM_SKU). Acceptable for dev/sideload, NOT for prod. To populate: Play Console \u2192 your app \u2192 Monetize \u2192 Monetization setup (older console: Setup \u2192 Licensing) \u2192 copy the Base64-encoded RSA public key (long block of A-Z/a-z/0-9/+// chars, no PEM headers) \u2192 paste as the PLAY_LICENSE_PUBLIC_KEY export. Consider adding a release-build assertion that fails the build if the key is empty.',
+  ),
+  todoRow(
+    'BLOCKED',
+    'Build / R8 missing classes',
+    'Release build fails at :app:minifyReleaseWithR8 on missing android.media.LoudnessCodecController referenced by Google Mobile Ads SDK',
+    'Full error: "Missing class android.media.LoudnessCodecController (referenced from: android.media.LoudnessCodecController com.google.android.gms.internal.ads.zzrz.zzb and 4 other contexts)". The class is API 35+; current compileSdkVersion is 34. Fix options: (a) add -dontwarn android.media.LoudnessCodecController and any other missing classes the build reports to proguard-rules.pro, or (b) raise android.compileSdkVersion 34 \u2192 35 in gradle.properties. Option (a) is the lower-risk path. After fixing, re-run ANDROID_SERIAL=R5CX10W4LJY ./gradlew installRelease and verify the premium hardening end-to-end on device.',
   ),
 ];
 
