@@ -11,6 +11,28 @@ try {
 
 const THEME_KEY = '@modforge/themeIsDark';
 
+// Module-level cache so the provider's lazy useState initializer can read
+// the persisted choice synchronously once hydrateTheme() has resolved.
+// Default is true (dark) — same as a fresh install with nothing stored.
+let cachedIsDark = true;
+let hydratePromise = null;
+
+export function hydrateTheme() {
+  if (hydratePromise) return hydratePromise;
+  hydratePromise = (async () => {
+    if (!AsyncStorage) return cachedIsDark;
+    try {
+      const raw = await AsyncStorage.getItem(THEME_KEY);
+      if (raw === 'true') cachedIsDark = true;
+      else if (raw === 'false') cachedIsDark = false;
+    } catch (e) {
+      // best-effort — keep default
+    }
+    return cachedIsDark;
+  })();
+  return hydratePromise;
+}
+
 const palettes = {
   dark: {
     mode: 'dark',
@@ -49,23 +71,19 @@ const AppThemeContext = createContext({
 });
 
 export function AppThemeProvider({ children }) {
-  // Default to dark on cold start. First-launch users always open in dark
-  // mode; we hydrate the persisted choice (if any) on mount so a returning
-  // light-mode user sees a brief flash of dark before swapping. That flash
-  // is acceptable — same trade-off premiumState / rosterState make.
-  const [isDark, setIsDark] = useState(true);
+  // Lazy initializer reads the cached value. App.js awaits hydrateTheme()
+  // during the warm-up sequence before dismissing the LoadingScreen, so by
+  // the time AppShell mounts cachedIsDark already reflects the persisted
+  // choice — no flash. The useEffect below is a safety net for any code
+  // path that mounts the provider before hydrateTheme() has resolved
+  // (e.g. tests or unexpected entry points).
+  const [isDark, setIsDark] = useState(() => cachedIsDark);
 
   useEffect(() => {
-    if (!AsyncStorage) return;
     let cancelled = false;
-    AsyncStorage.getItem(THEME_KEY)
-      .then(raw => {
-        if (cancelled || raw == null) return;
-        // Stored value is the JSON literal "true" / "false".
-        const stored = raw === 'true' ? true : raw === 'false' ? false : null;
-        if (stored !== null) setIsDark(stored);
-      })
-      .catch(() => {});
+    hydrateTheme().then(value => {
+      if (!cancelled) setIsDark(value);
+    }).catch(() => {});
     return () => { cancelled = true; };
   }, []);
 
@@ -75,6 +93,7 @@ export function AppThemeProvider({ children }) {
     toggleTheme: () => {
       setIsDark(prev => {
         const next = !prev;
+        cachedIsDark = next;
         if (AsyncStorage) {
           AsyncStorage.setItem(THEME_KEY, next ? 'true' : 'false').catch(() => {});
         }

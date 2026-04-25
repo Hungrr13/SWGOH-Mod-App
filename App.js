@@ -17,7 +17,7 @@ import {
 
 LogBox.ignoreAllLogs();
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { AppThemeProvider, useAppTheme, useThemeControls } from './src/theme/appTheme';
+import { AppThemeProvider, useAppTheme, useThemeControls, hydrateTheme } from './src/theme/appTheme';
 import * as rosterState from './src/services/rosterState';
 import * as premiumState from './src/services/premiumState';
 import AdBanner from './src/components/AdBanner';
@@ -369,6 +369,14 @@ function AppShell() {
     };
 
     (async () => {
+      // Read the persisted theme choice BEFORE we let the loading screen
+      // dismiss — otherwise the home UI flashes in dark default for one frame
+      // before flipping to the user's saved light mode.
+      try {
+        await hydrateTheme();
+      } catch (error) {
+        // best-effort — falls back to dark default
+      }
       try {
         const overlayCapture = require('./src/services/overlayCapture');
         if (overlayCapture?.warmScanner) {
