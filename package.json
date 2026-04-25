@@ -12,7 +12,8 @@
     "refresh:secondaries": "node tools/refresh-secondary-focus.js",
     "open:secondaries": "node tools/open-mod-source-best-mod-urls.js",
     "build:abilities-urls": "node tools/build-mod-source-unit-urls.js",
-    "open:abilities": "node tools/open-mod-source-best-mod-urls.js --input references/mod-source/mod_source_unit_urls.txt"
+    "open:abilities": "node tools/open-mod-source-best-mod-urls.js --input references/mod-source/mod_source_unit_urls.txt",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -28,11 +29,13 @@
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-google-mobile-ads": "^14.7.2",
+    "react-native-iap": "^12.16.4",
     "react-native-safe-area-context": "~5.6.2",
     "react-native-screens": "~4.16.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.25.2"
+    "@babel/core": "^7.25.2",
+    "patch-package": "^8.0.1"
   },
   "private": true
 }

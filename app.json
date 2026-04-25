@@ -54,7 +54,8 @@
         }
       ],
       "expo-asset",
-      "./plugins/withOverlayCapture"
+      "./plugins/withOverlayCapture",
+      "react-native-iap"
     ]
   }
 }

@@ -98,6 +98,11 @@ android {
         multiDexKeepProguard file("multidex-config.pro")
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
+
+        // react-native-iap ships two product flavors (play / amazon). Pin to
+        // the Play variant so Gradle can resolve :react-native-iap without an
+        // ambiguity error during release builds.
+        missingDimensionStrategy 'store', 'play'
     }
     signingConfigs {
         debug {

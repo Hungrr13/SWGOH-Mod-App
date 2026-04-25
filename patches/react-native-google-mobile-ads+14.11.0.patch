@@ -1,0 +1,55 @@
+diff --git a/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobileads/ReactNativeGoogleMobileAdsModule.kt b/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobileads/ReactNativeGoogleMobileAdsModule.kt
+index 0000000..0000001 100644
+--- a/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobileads/ReactNativeGoogleMobileAdsModule.kt
++++ b/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobileads/ReactNativeGoogleMobileAdsModule.kt
+@@ -111,7 +111,7 @@ class ReactNativeGoogleMobileAdsModule(reactContext: ReactApplicationContext) :
+       // it is not clear if that will cause problems even if it happens, but users that have widely deployed this
+       // with the use of currentActivity have not seen problems
+       // reference if it needs attention: https://github.com/invertase/react-native-google-mobile-ads/pull/664
+-      currentActivity ?: reactApplicationContext,
++      getCurrentActivity() ?: reactApplicationContext,
+       OnInitializationCompleteListener { initializationStatus ->
+         val result = Arguments.createArray()
+         for ((key, value) in initializationStatus.adapterStatusMap) {
+@@ -136,7 +136,7 @@ class ReactNativeGoogleMobileAdsModule(reactContext: ReactApplicationContext) :
+
+   @ReactMethod
+   fun openAdInspector(promise: Promise) {
+-    val activity = currentActivity
++    val activity = getCurrentActivity()
+     if (activity == null) {
+       promise.reject("null-activity", "Ad Inspector attempted to open but the current Activity was null.")
+       return
+@@ -164,8 +164,8 @@ class ReactNativeGoogleMobileAdsModule(reactContext: ReactApplicationContext) :
+
+   @ReactMethod
+   fun openDebugMenu(adUnit: String) {
+-    currentActivity?.runOnUiThread {
+-      MobileAds.openDebugMenu(currentActivity!!, adUnit)
++    getCurrentActivity()?.runOnUiThread {
++      MobileAds.openDebugMenu(getCurrentActivity()!!, adUnit)
+     }
+   }
+
+diff --git a/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobileads/ReactNativeGoogleMobileAdsFullScreenAdModule.kt b/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobileads/ReactNativeGoogleMobileAdsFullScreenAdModule.kt
+index 0000000..0000001 100644
+--- a/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobileads/ReactNativeGoogleMobileAdsFullScreenAdModule.kt
++++ b/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobileads/ReactNativeGoogleMobileAdsFullScreenAdModule.kt
+@@ -69,7 +69,7 @@ abstract class ReactNativeGoogleMobileAdsFullScreenAdModule(reactContext: ReactA
+   fun load(
+     requestId: Int, adUnitId: String, adRequestOptions: ReadableMap
+   ) {
+-    val activity = currentActivity
++    val activity = getCurrentActivity()
+     if (activity == null) {
+       val error = Arguments.createMap()
+       error.putString("code", "null-activity")
+@@ -105,7 +105,7 @@ abstract class ReactNativeGoogleMobileAdsFullScreenAdModule(reactContext: ReactA
+   fun show(
+     requestId: Int, adUnitId: String, showOptions: ReadableMap, promise: Promise
+   ) {
+-    val activity = currentActivity
++    val activity = getCurrentActivity()
+     if (activity == null) {
+       rejectPromiseWithCodeAndMessage(
+         promise,
