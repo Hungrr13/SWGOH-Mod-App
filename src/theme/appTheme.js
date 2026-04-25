@@ -1,4 +1,15 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+
+// Lazy-require AsyncStorage so this module can still be imported in unit
+// tests / Node tooling that doesn't have the native bridge wired up.
+let AsyncStorage = null;
+try {
+  AsyncStorage = require('@react-native-async-storage/async-storage').default;
+} catch (e) {
+  AsyncStorage = null;
+}
+
+const THEME_KEY = '@modforge/themeIsDark';
 
 const palettes = {
   dark: {
@@ -38,12 +49,38 @@ const AppThemeContext = createContext({
 });
 
 export function AppThemeProvider({ children }) {
+  // Default to dark on cold start. First-launch users always open in dark
+  // mode; we hydrate the persisted choice (if any) on mount so a returning
+  // light-mode user sees a brief flash of dark before swapping. That flash
+  // is acceptable — same trade-off premiumState / rosterState make.
   const [isDark, setIsDark] = useState(true);
+
+  useEffect(() => {
+    if (!AsyncStorage) return;
+    let cancelled = false;
+    AsyncStorage.getItem(THEME_KEY)
+      .then(raw => {
+        if (cancelled || raw == null) return;
+        // Stored value is the JSON literal "true" / "false".
+        const stored = raw === 'true' ? true : raw === 'false' ? false : null;
+        if (stored !== null) setIsDark(stored);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const value = useMemo(() => ({
     theme: isDark ? palettes.dark : palettes.light,
     isDark,
-    toggleTheme: () => setIsDark(prev => !prev),
+    toggleTheme: () => {
+      setIsDark(prev => {
+        const next = !prev;
+        if (AsyncStorage) {
+          AsyncStorage.setItem(THEME_KEY, next ? 'true' : 'false').catch(() => {});
+        }
+        return next;
+      });
+    },
   }), [isDark]);
 
   return (
