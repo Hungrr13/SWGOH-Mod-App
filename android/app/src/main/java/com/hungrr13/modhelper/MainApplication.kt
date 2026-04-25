@@ -12,6 +12,7 @@ import com.facebook.react.ReactHost
 import com.facebook.react.common.ReleaseLevel
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint
 import com.facebook.react.defaults.DefaultReactNativeHost
+import com.hungrr13.modhelper.iap.IapVerifierPackage
 import com.hungrr13.modhelper.overlay.ModOverlayCapturePackage
 
 import expo.modules.ApplicationLifecycleDispatcher
@@ -25,6 +26,7 @@ class MainApplication : MultiDexApplication(), ReactApplication {
         override fun getPackages(): List<ReactPackage> =
             PackageList(this).packages.apply {
               add(ModOverlayCapturePackage())
+              add(IapVerifierPackage())
             }
 
           override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"
