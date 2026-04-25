@@ -1,6 +1,0 @@
-snapshot=20260418-145641
-created=2026-04-18T14:56:41.5940973-04:00
-source_overlay=C:\Users\Chad\my-app\android\app\src\main\java\com\hungrr13\modsswgoh\overlay
-source_mod_shapes=C:\Users\Chad\my-app\android\app\src\main\assets\mod_shapes
-git_branch=main
-git_head=992fdc9912a66825721b9a64e2f36211bb74dd8c

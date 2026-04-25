@@ -11,40 +11,14 @@ import { useAppTheme } from '../theme/appTheme';
 import {
   SHAPES, SHAPE_PRIMARIES, MOD_SETS,
   SLICE_REF, secQualityColor,
-  decodePrimary, decodeModSet,
   MOD_TIERS, rollEfficiency, efficiencyColor, efficiencyLabel,
 } from '../constants/modData';
-import { CHARS as RAW_CHARS } from '../data/chars';
-import { evaluateSliceMod, countAlignedForMatch } from '../services/sliceEngine';
+import { DECODED_CHARS, ENGINE_SLICE_REF } from '../data/charDecoding';
+import { evaluateSliceMod, countAlignedForMatch, getDecisionDescription } from '../services/sliceEngine';
 import SlicerWhyPanel from '../components/SlicerWhyPanel';
 import * as premiumState from '../services/premiumState';
 import * as rosterState from '../services/rosterState';
 import { CHAR_BASE_IDS } from '../data/charBaseIds';
-
-// ── Decode chars once, deduplicate by name ───────────────────────────────────
-const _seen = new Set();
-const DECODED_CHARS = RAW_CHARS.filter(c => {
-  if (_seen.has(c.name)) return false;
-  _seen.add(c.name);
-  return true;
-}).map(c => ({
-  ...c,
-  arrow:    decodePrimary(c.arrow),
-  triangle: decodePrimary(c.triangle),
-  circle:   decodePrimary(c.circle),
-  cross:    decodePrimary(c.cross),
-  modSet:   decodeModSet(c.modSet),
-  buTri:    c.buTri ? decodePrimary(c.buTri) : undefined,
-  buCir:    c.buCir ? decodePrimary(c.buCir) : undefined,
-  buCro:    c.buCro ? decodePrimary(c.buCro) : undefined,
-  buArr:    c.buArr ? decodePrimary(c.buArr) : undefined,
-  buSet:    c.buSet ? decodeModSet(c.buSet) : undefined,
-}));
-
-// ── Map SLICE_REF to format sliceEngine expects ──────────────────────────────
-const ENGINE_SLICE_REF = SLICE_REF.map(r => ({
-  stat: r.s, max5: r.m5, max6: r.m6, good: r.g, great: r.gr,
-}));
 
 // ── Decision colour helpers ──────────────────────────────────────────────────
 function decisionColor(label) {
@@ -66,15 +40,6 @@ function bandColor(band) {
   if (band === 'GREAT') return '#c084fc';
   if (band === 'GOOD')  return '#60a5fa';
   return '#4ade80';
-}
-
-function decisionDefinition(label) {
-  if (label === 'PREMIUM SLICE') return 'Top-tier mod. Spend slice mats confidently.';
-  if (label === 'STRONG SLICE') return 'Very good slice target with strong value.';
-  if (label === 'SLICE IF NEEDED') return 'Worth slicing when you need this exact mod type.';
-  if (label === 'HOLD') return 'Keep and use it, but save slice mats for better mods.';
-  if (label === 'FILLER ONLY') return 'Usable for now, but not worth slicing.';
-  return 'Low-value mod shell or weak stat mix.';
 }
 
 function getMatchPresentation(score, topScore, rank) {
@@ -488,7 +453,7 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
                 </Text>
                 <Text style={styles.verdictScore}>Score: {result.finalScore} / 100</Text>
                 <Text style={styles.verdictMeaning}>
-                  {decisionDefinition(result.decision)}
+                  {getDecisionDescription(result.decision)}
                 </Text>
                 {result.reasonLines[0] ? (
                   <Text style={styles.verdictReason}>{result.reasonLines[0]}</Text>

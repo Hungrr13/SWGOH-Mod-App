@@ -19,6 +19,7 @@ function todoRow(status, area, description, notes) {
     'IN PROGRESS': 'D9E7FF',
     DONE: 'D5F0D5',
     BLOCKED: 'FADBD8',
+    PARKED: 'E6E0EC',
   }[status] || undefined;
   return new TableRow({
     children: [
@@ -86,10 +87,10 @@ const rows = [
     'Landed 2026-04-20 in commit a704edf + follow-up majority-vote rescue. Verified on-device: Cross now classifies as Cross. Archive on next sweep.',
   ),
   todoRow(
-    'OPEN',
+    'PARKED',
     'Shape classifier',
     'Inner cavity mask shows notch at top on Circle \u2014 investigate if portrait-removal or pip-cleanup clipping the rim',
-    'See shape-classifier-candidate-inner-mask.png from the Apr 20 Circle scan.',
+    'Parked 2026-04-23 pending fresh sample. See shape-classifier-candidate-inner-mask.png from the Apr 20 Circle scan.',
   ),
   todoRow(
     'DONE',
@@ -114,6 +115,18 @@ const rows = [
     'Repo hygiene',
     'Decide fate of references/mod-source-html/*_files/ (SWGOH.GG webpack bundles)',
     'Carried over from READMEBEFOREEDITING.md follow-ups. Parsers never touch them; deleting would shrink repo meaningfully.',
+  ),
+  todoRow(
+    'DONE',
+    'Repo hygiene / cleanup',
+    'Codebase cleanup pass: deleted archive/, removed src/data/chars.js.bak, deduplicated DECODED_CHARS, consolidated verdict helpers, documented tools/',
+    'Landed 2026-04-24. archive/ (53 files) deleted with backup pushed to backup/pre-cleanup-2026-04-24 and chars.js.bak copied to C:/Users/Chad/my-app/backups/. New src/data/charDecoding.js exports DECODED_CHARS + ENGINE_SLICE_REF used by both overlayRecommendation and SliceScreen. New getDecisionDescription() export on sliceEngine.js replaces two slightly drifted decisionDefinition() helpers. New tools/README.md catalogs all 22 dev scripts.',
+  ),
+  todoRow(
+    'DONE',
+    'Theme / shape icons',
+    'Light-mode shape icons: cross/triangle/diamond/etc. now have light-mode variants so they don\u2019t render as black blobs on the white background',
+    'Each shape PNG has a metallic colored frame + dark inner cavity + dark outer drop-shadow. New tools/gen-shape-lightmode.py rewrites pixels with max(R,G,B) < 55 to white while preserving alpha (soft black aura becomes soft white glow). Generated assets/shapes/{name}-light.png for all 6 shapes. ModShapeIcon.js now reads isDark from useThemeControls() and swaps source maps accordingly. Verified visually before commit. Push LUM_MAX from 55 to 65 in the script if any dark specks survive on-device.',
   ),
   todoRow(
     'DONE',
@@ -152,10 +165,10 @@ const rows = [
     'DONE: rosterService fetches ?mods=1 and returns per-character missingSlots + upgradeable count (level<15 OR pips<6 OR tier<5). SliceScreen shows \u201cX to upgrade\u201d / missing-slot badges. Slot-level upgrade-vs-scan delta is tracked in the separate Slice-engine slot-badge row.',
   ),
   todoRow(
-    'OPEN',
+    'PARKED',
     'Shape classifier',
     'Second Circle mod reads as Cross: no candidate view sees a round outline (outer circularity 0.404, mask-only circularity 0.333, extent 0.933, stronglyRound=false)',
-    'Unlike Grievous, this Circle\u2019s mask-only candidate doesn\u2019t see the round outline at all. Hypotheses: (a) capture framing cut off part of the mod, (b) different Circle visual tier/set produces a different silhouette profile. Collect multiple Circle scans (different tiers/sets/primaries) to determine whether new rescue rule is needed or whether it\u2019s a capture artifact.',
+    'Parked 2026-04-23 pending broader Circle sample set. Unlike Grievous, this Circle\u2019s mask-only candidate doesn\u2019t see the round outline at all. Hypotheses: (a) capture framing cut off part of the mod, (b) different Circle visual tier/set produces a different silhouette profile. Collect multiple Circle scans (different tiers/sets/primaries) to determine whether new rescue rule is needed or whether it\u2019s a capture artifact.',
   ),
   todoRow(
     'DONE',
@@ -254,10 +267,10 @@ const rows = [
     'swgoh.gg\u2019s /gac/squads/ page takes a ?perspective=attack&sort=percent query param that returns a completely different list (top attacking squads sorted by Win %) than the default defense view (top defenders sorted by Hold %). Top attacker (SITHPALPATINE solo, 96%) is not derivable from top defender (JABBATHEHUTT+BOUSHH+KRRSANTAN 27% hold) \u2014 they\u2019re independent datasets. scrapeGacSquads now fetches both perspectives in parallel, parses each through parseGacSquadsHtml(html, role), and emits squads tagged with the appropriate role and single populated win-rate field. Attack view legitimately includes 1-member solo squads so bracket detection runs off the defense view only. Deployed. Verified: /?gac=3v3 returns 87 squads (42 def + 45 off); /?gac=5v5 returns 70 (37 def + 33 off).',
   ),
   todoRow(
-    'OPEN',
+    'DONE',
     'Slice tab / incomplete secondary transfer',
-    'Not all secondaries from the scan are making it to the Slice tab \u2014 some mods come through with missing rows',
-    'Separate from the tier-letter OCR issue. Even when the tier is picked up correctly, some scans lose one or more secondaries on the handoff from parser \u2192 App.js slicePrefill \u2192 SliceScreen. Could be: (a) a regex in extractSecondaries dropping a row whose stat name has unusual spacing/OCR noise, (b) the primary-dedup backstop added last session filtering too aggressively when a flat stat shares a name with the primary, (c) slice(0, 4) capping before a real 4th secondary is seen because a phantom row snuck in earlier. Plan: collect a fresh ocr-debug-last.txt for a mod where a secondary is missing, trace through parser step-by-step against that dump, and compare parsed.secondaries vs. the on-card text.',
+    'Secondaries now transfer fully from scan \u2192 Slice tab',
+    'User-verified resolved on 2026-04-23. Likely fell out of the parser cascading fixes (tier-letter-glued-to-first-secondary + rollFirstPattern dedup preference + primary-dedup-after-flat-promotion) that landed earlier this session. Archive on next sweep.',
   ),
   todoRow(
     'DONE',

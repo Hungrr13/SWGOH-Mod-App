@@ -11,7 +11,6 @@ This is the current repo map after the cleanup pass. If you are not sure where t
 - `tools/`: maintenance scripts and classifier workflows.
 - `references/`: saved imports, scraped HTML, and manual review/reference files.
 - `docs/`: human-facing setup and workflow notes.
-- `archive/`: old experiments and legacy files that are no longer on the active path.
 - `android/`: generated/native Android project.
 - `plugins/`: Expo config plugins for native wiring.
 
@@ -83,7 +82,7 @@ This is the current repo map after the cleanup pass. If you are not sure where t
   - `diamond_mask.png`
   - `square_mask.png`
   - `triangle_mask.png`
-- The app matches observed masks/contours against those bundled masks, not against the old scratch files under `archive/` or the Claude worktree debug exports.
+- The app matches observed masks/contours against those bundled masks, not against the Claude worktree debug exports.
 - Runtime reference loading is wired through `SHAPE_REFERENCE_ASSET_NAMES` and `loadBundledShapeReferences()` in `ModIconClassifier.kt`.
 
 ## Current mod-shape debugging workflow
@@ -171,7 +170,7 @@ This is the current repo map after the cleanup pass. If you are not sure where t
 - `SLICE_GAIN` table in `modData.js` drives the 6-dot catalyst rule: stats whose cap jumps meaningfully at 6E (Offense% 2.02×, Defense% 1.34×, Health% 0.78×, Protection% 0.33×) are candidates; stats that barely move (Speed 0.03×, Crit Chance% 0.04×) are not — which is why Speed secondaries don't justify 6E on their own, only Speed arrow primaries do.
 
 ### chars.js refreshed from swgoh.gg mod meta report
-- `src/data/chars.js` rewritten against `https://swgoh.gg/stats/mod-meta-report/` — the single-page consensus table that lists recommended sets + per-shape primary for every character. 277 entries had drifted from the current meta (e.g. Aayla cross `Potency` → `Protection/Offense`, Ahsoka Tano set `Offense(x4)+Health(x2)` → `Speed(x4)+Health(x2)`). 47 entries were already correct. 1 character (Cobb Vanth) isn't in the meta table yet and was left as-is. `src/data/chars.js.bak` is the pre-rewrite snapshot.
+- `src/data/chars.js` rewritten against `https://swgoh.gg/stats/mod-meta-report/` — the single-page consensus table that lists recommended sets + per-shape primary for every character. 277 entries had drifted from the current meta (e.g. Aayla cross `Potency` → `Protection/Offense`, Ahsoka Tano set `Offense(x4)+Health(x2)` → `Speed(x4)+Health(x2)`). 47 entries were already correct. 1 character (Cobb Vanth) isn't in the meta table yet and was left as-is.
 - Verifier: `tools/verify-chars-vs-swgoh.js`. Fetches the meta report through our Cloudflare Worker (scrape allow-list now includes `/stats/`), parses each `<tbody>` row (character slug, stacked `stat-mod-set-def-icon--set-<id>` icons, last 4 `<td>`s = Arrow/Triangle/Circle/Cross primaries), and diffs against `chars.js`. Supports multi-primary tolerance lists like `Protection / Tenacity` — a local value is a match if it appears anywhere in the reported list. Run dry: `node tools/verify-chars-vs-swgoh.js`. Apply: `node tools/verify-chars-vs-swgoh.js --apply`.
 - Set decoding rule: each `set-<id>` icon is one active set-bonus instance. 4-piece sets (Speed / Offense / Crit Dmg) contribute 4 mods per icon; 2-piece sets (Health / Defense / Crit Chance / Potency / Tenacity) contribute 2 mods per icon. So `set-4 + set-7` = `Speed(x4) + Tenacity(x2)`; `set-1 + set-1 + set-3` = `Health(x4) + Defense(x2)`.
 
@@ -332,7 +331,7 @@ This is the current repo map after the cleanup pass. If you are not sure where t
 - `hideRecommendationOverlay` hides both cards.
 
 ### Loading screen
-- Restored from `archive/legacy-ui/LoadingScreen.js` to `src/components/LoadingScreen.js`.
+- Lives at `src/components/LoadingScreen.js`.
 - `AppShell` in `App.js` renders it while `isWarmingUp` is true. A warm-up effect calls `overlayCapture.warmScanner()` and drops the splash after it resolves, with a minimum visible duration of 1200ms so it doesn't flash on fast restarts.
 - `warmScanner()` now *actually* waits: native `ModOverlayCaptureService` exposes `awaitWarmUp(Runnable)` / `markWarmedUp()`. The `@ReactMethod warmScanner` Promise resolves only after classifier assets and the ML Kit OCR recognizer are both primed, so the first scan after the splash is fast.
 - Subtitle cycles through generic sci-fi status phrases (e.g. "Starting thrusters", "Entering hyperdrive", "Avoiding comet field", "Plotting jump coordinates", "Warming reactor core") with a fade transition. Phrase list lives in `STATUS_PHRASES` at the top of `LoadingScreen.js`. Trademark-specific terms (Dagobah, kyber, holotables) were deliberately swapped out for generic sci-fi alternates.
@@ -371,15 +370,6 @@ This is the current repo map after the cleanup pass. If you are not sure where t
 - `.gitignore` extended to cover `android/build/`, `android/app/build/`, `android/.gradle/`, `android/.kotlin/`, `android/local.properties`, `android/captures/`, `android/.idea/`, `android/app/release/`, `*.iml`, `*.hprof`, and `.expo/`.
 - Native Kotlin + `AndroidManifest.xml` changes require `./gradlew installDebug` (or equivalent). JS-only changes (`App.js`, `src/**/*.js`) reload via Metro.
 
-## Archive
-
-- `archive/legacy-scoring/shape/`: old shape-classifier experiments and debug output that are no longer on the active path.
-- `archive/legacy-scoring/set/`: old set-scoring scratch files.
-- `archive/legacy-scoring/slice/`: retired slice-scoring prototypes.
-- `archive/legacy-character-data/`: old raw character exports kept only for reference.
-- `archive/legacy-ui/`: retired UI files.
-- `archive/legacy-android/`: one-off Android extraction leftovers.
-
 ## Where to edit for common tasks
 
 - Character recommendations: `src/data/chars.js`
@@ -395,5 +385,19 @@ This is the current repo map after the cleanup pass. If you are not sure where t
 - Generated: `src/data/secFocus.js`
 - Generated: `tools/set-classifier/training-data/`
 - Generated/synced: `assets/mod-templates/learned-sets/`
+- Generated: `assets/shapes/{name}-light.png` (run `python tools/gen-shape-lightmode.py` to regenerate)
 - Hand-edited source of truth: `src/data/chars.js`
-- Non-runtime storage: everything under `archive/`
+
+## Recent cleanup pass (2026-04-24)
+
+- Deleted `archive/` (53 files of legacy experiments) and `src/data/chars.js.bak`. A pre-cleanup snapshot lives on `backup/pre-cleanup-2026-04-24` (pushed to GitHub) and `chars.js.bak` was copied to `C:/Users/Chad/my-app/backups/chars.js.bak.2026-04-24` before deletion.
+- Extracted the duplicated `DECODED_CHARS` + `ENGINE_SLICE_REF` definitions from `OverlayRecommendation.js` and `SliceScreen.js` into `src/data/charDecoding.js`. Both call-sites import from the shared module.
+- Consolidated the duplicated `decisionDefinition()` helper into a single `getDecisionDescription(label)` export on `sliceEngine.js`. SliceScreen + overlayRecommendation use it; the wording now matches across the Slice tab and overlay verdict.
+- Added `tools/README.md` cataloguing the 22 dev scripts grouped by purpose (data pipeline, set classifier, build artifacts, shape icons, debug/QA).
+
+## Light-mode shape icons
+
+- Each `assets/shapes/{name}.png` has a metallic colored frame plus dark inner cavity + dark outer aura. Those reads invisibly against the dark `#0a0e17` background but rendered as ugly black blobs against the light `#f4f7fb` background.
+- `tools/gen-shape-lightmode.py` rewrites every pixel with `max(R,G,B) < 55` to white while preserving alpha — soft black aura becomes soft white glow. Outputs `{name}-light.png` next to each original.
+- `ModShapeIcon.js` now reads `isDark` from `useThemeControls()` and switches between `SHAPE_SOURCES_DARK` and `SHAPE_SOURCES_LIGHT` accordingly.
+- Threshold (`LUM_MAX = 55`) was chosen by histogram inspection — see comments in the script. Push to ~65 if you spot remaining dark specks, but it risks eating the darkest frame shadows.

@@ -739,6 +739,20 @@ function getDecisionLabel(finalScore) {
   return SLICE_RULES.thresholds.find((t) => finalScore >= t.min)?.label || "DO NOT SLICE";
 }
 
+const DECISION_DESCRIPTIONS = {
+  "PREMIUM SLICE": "Top-tier mod. Spend slice mats confidently.",
+  "STRONG SLICE": "Very good slice target with strong value.",
+  "SLICE IF NEEDED": "Worth slicing when you need this exact mod type.",
+  "HOLD": "Keep and use it, but save slice mats for better mods.",
+  "FILLER ONLY": "Usable for now, but not worth slicing.",
+  "SELL": "Low-value mod shell or weak stat mix.",
+  "DO NOT SLICE": "Low-value mod shell or weak stat mix.",
+};
+
+export function getDecisionDescription(label) {
+  return DECISION_DESCRIPTIONS[label] || DECISION_DESCRIPTIONS["DO NOT SLICE"];
+}
+
 function getCeilingLabel(upsideScore) {
   return upsideScore >= 65 ? "HIGH CEILING" : "LOW CEILING";
 }

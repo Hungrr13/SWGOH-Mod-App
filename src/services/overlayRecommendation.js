@@ -1,6 +1,6 @@
-import { SLICE_REF, decodeModSet, decodePrimary, ROLL_DATA } from '../constants/modData';
-import { CHARS as RAW_CHARS } from '../data/chars';
-import { evaluateSliceMod } from './sliceEngine';
+import { ROLL_DATA } from '../constants/modData';
+import { DECODED_CHARS, ENGINE_SLICE_REF } from '../data/charDecoding';
+import { evaluateSliceMod, getDecisionDescription } from './sliceEngine';
 
 // Max rolls a single secondary can have at each tier. In SWGOH each tier
 // slice (E→D→C→B→A) adds one random roll to an existing secondary, so
@@ -37,42 +37,6 @@ function resolveRolls(s) {
   const explicit = parseInt(s?.rolls, 10);
   if (Number.isFinite(explicit) && explicit > 0) return explicit;
   return estimateRolls(s?.stat, s?.value);
-}
-
-const seen = new Set();
-const DECODED_CHARS = RAW_CHARS.filter(c => {
-  if (seen.has(c.name)) return false;
-  seen.add(c.name);
-  return true;
-}).map(c => ({
-  ...c,
-  arrow: decodePrimary(c.arrow),
-  triangle: decodePrimary(c.triangle),
-  circle: decodePrimary(c.circle),
-  cross: decodePrimary(c.cross),
-  modSet: decodeModSet(c.modSet),
-  buTri: c.buTri ? decodePrimary(c.buTri) : undefined,
-  buCir: c.buCir ? decodePrimary(c.buCir) : undefined,
-  buCro: c.buCro ? decodePrimary(c.buCro) : undefined,
-  buArr: c.buArr ? decodePrimary(c.buArr) : undefined,
-  buSet: c.buSet ? decodeModSet(c.buSet) : undefined,
-}));
-
-const ENGINE_SLICE_REF = SLICE_REF.map(r => ({
-  stat: r.s,
-  max5: r.m5,
-  max6: r.m6,
-  good: r.g,
-  great: r.gr,
-}));
-
-function decisionDefinition(label) {
-  if (label === 'PREMIUM SLICE') return 'Top-tier slice target.';
-  if (label === 'STRONG SLICE') return 'Very good slice target.';
-  if (label === 'SLICE IF NEEDED') return 'Worth slicing when you need this shell.';
-  if (label === 'HOLD') return 'Keep it, but save mats for better mods.';
-  if (label === 'FILLER ONLY') return 'Usable now, but not worth slicing.';
-  return 'Low-value shell or weak stat mix.';
 }
 
 function normalizeSecondaries(secondaries = []) {
@@ -207,7 +171,7 @@ export function buildOverlayRecommendation(parsed, options = {}) {
   const title = plan?.label
     ? `${plan.label} · ${result.finalScore}/100`
     : `${result.decision} ${result.finalScore}/100`;
-  const verdictLine = plan?.desc || decisionDefinition(result.decision);
+  const verdictLine = plan?.desc || getDecisionDescription(result.decision);
 
   return {
     title,
@@ -314,7 +278,7 @@ export function buildOverlayRecommendations(parsed, options = {}) {
         ? [shell, 'Need 2+ clear secondaries for slice value.'].filter(Boolean).join('\n')
         : [
             shell,
-            plan?.desc || decisionDefinition(result.decision),
+            plan?.desc || getDecisionDescription(result.decision),
           ].filter(Boolean).join('\n');
 
   const charBody = topMatches.length
