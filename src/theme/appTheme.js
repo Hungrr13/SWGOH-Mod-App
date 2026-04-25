@@ -73,16 +73,25 @@ const AppThemeContext = createContext({
 export function AppThemeProvider({ children }) {
   // Lazy initializer reads the cached value. App.js awaits hydrateTheme()
   // during the warm-up sequence before dismissing the LoadingScreen, so by
-  // the time AppShell mounts cachedIsDark already reflects the persisted
-  // choice — no flash. The useEffect below is a safety net for any code
-  // path that mounts the provider before hydrateTheme() has resolved
-  // (e.g. tests or unexpected entry points).
+  // the time the user can interact with the UI cachedIsDark already
+  // reflects the persisted choice — no flash.
+  //
+  // The useEffect below covers two cases:
+  //   1. Tests / entry points that mount the provider before hydrateTheme()
+  //      has resolved.
+  //   2. Android occasionally recreates the activity (config changes, the
+  //      overlay scanner attaching, etc.) which calls AppRegistry's
+  //      runApplication a second time and remounts this provider inside
+  //      the same JS process. cachedIsDark already holds the live value
+  //      (toggleTheme writes to it synchronously), so we re-sync to that
+  //      rather than to the promise's originally-resolved value — that's
+  //      what was clobbering toggles on remount.
   const [isDark, setIsDark] = useState(() => cachedIsDark);
 
   useEffect(() => {
     let cancelled = false;
-    hydrateTheme().then(value => {
-      if (!cancelled) setIsDark(value);
+    hydrateTheme().then(() => {
+      if (!cancelled) setIsDark(cachedIsDark);
     }).catch(() => {});
     return () => { cancelled = true; };
   }, []);
