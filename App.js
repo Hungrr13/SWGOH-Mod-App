@@ -398,6 +398,20 @@ function AppShell() {
       } catch (error) {
         // premium hydration is best-effort — defaults to locked
       }
+      // Anti-tamper: after loading the cached value, re-derive from
+      // Google Play. Google is the source of truth — this overwrites
+      // the cache if a user flipped the AsyncStorage flag, or if a
+      // refund / chargeback revoked the purchase. If Play is offline
+      // or the query times out, we leave the cache alone so a flaky
+      // connection doesn't lock paying users out.
+      try {
+        const iap = require('./src/services/iap');
+        if (iap.isAvailable && iap.isAvailable()) {
+          await iap.reconcileWithPlay({ timeoutMs: 3000 });
+        }
+      } catch (error) {
+        // never block startup on Play reconciliation
+      }
       // Cold-start interstitial: capped to once per 6h. Awaited here so the
       // ad shows OVER the loading screen rather than jumping in after the
       // home UI has already rendered (which felt jarring). Hard-cap at 4s
