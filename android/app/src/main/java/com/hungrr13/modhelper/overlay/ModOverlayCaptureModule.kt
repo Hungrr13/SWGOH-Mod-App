@@ -111,6 +111,31 @@ class ModOverlayCaptureModule(
             lines.pushString(line)
           }
           payload.putArray("ocrLines", lines)
+          payload.putString(
+            "detectedTier",
+            intent.getStringExtra(ModOverlayCaptureService.EXTRA_CAPTURE_TIER)
+          )
+          payload.putString(
+            "detectedTierLetter",
+            intent.getStringExtra(ModOverlayCaptureService.EXTRA_CAPTURE_TIER_LETTER)
+          )
+          payload.putInt(
+            "detectedTierDots",
+            intent.getIntExtra(ModOverlayCaptureService.EXTRA_CAPTURE_TIER_DOTS, 0)
+          )
+          payload.putDouble(
+            "detectedTierScore",
+            intent.getDoubleExtra(ModOverlayCaptureService.EXTRA_CAPTURE_TIER_SCORE, 0.0)
+          )
+          payload.putDouble(
+            "detectedPipScore",
+            intent.getDoubleExtra(ModOverlayCaptureService.EXTRA_CAPTURE_PIP_SCORE, 0.0)
+          )
+          val topTierMatches = Arguments.createArray()
+          intent.getStringArrayListExtra(ModOverlayCaptureService.EXTRA_CAPTURE_TOP_TIER_MATCHES)?.forEach { item ->
+            topTierMatches.pushString(item)
+          }
+          payload.putArray("topTierMatches", topTierMatches)
         }
         ModOverlayCaptureService.ACTION_CAPTURE_ERROR -> {
           payload.putString("type", "captureError")

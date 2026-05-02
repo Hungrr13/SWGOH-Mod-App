@@ -190,6 +190,12 @@ export default function OverlayCaptureScreen({ onBack, onUseInFinder, onUseInSli
           topShapeMatches: Array.isArray(event.topShapeMatches) ? event.topShapeMatches : [],
           topSetMatches: Array.isArray(event.topSetMatches) ? event.topSetMatches : [],
           variantShapeMatchesJson: typeof event.variantShapeMatchesJson === 'string' ? event.variantShapeMatchesJson : '',
+          detectedTier: typeof event.detectedTier === 'string' ? event.detectedTier : '',
+          detectedTierLetter: typeof event.detectedTierLetter === 'string' ? event.detectedTierLetter : '',
+          detectedTierDots: Number.isFinite(event.detectedTierDots) ? event.detectedTierDots : 0,
+          detectedTierScore: Number.isFinite(event.detectedTierScore) ? event.detectedTierScore : 0,
+          detectedPipScore: Number.isFinite(event.detectedPipScore) ? event.detectedPipScore : 0,
+          topTierMatches: Array.isArray(event.topTierMatches) ? event.topTierMatches : [],
         });
         setAnalysisResult(null);
       } else if (event?.type === 'captureError') {

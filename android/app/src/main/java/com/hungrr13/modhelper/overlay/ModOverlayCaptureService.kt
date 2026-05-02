@@ -51,6 +51,8 @@ class ModOverlayCaptureService : Service() {
 
   private val logTag = "ModOverlayCapture"
   private val iconClassifier by lazy { ModIconClassifier(this) }
+  private val tierClassifier by lazy { ModTierClassifier(this) }
+  @Volatile private var lastTierDetection: ModTierClassifier.TierDetection? = null
   private var textRecognizerInitialized = false
   private val textRecognizer by lazy {
     textRecognizerInitialized = true
@@ -961,6 +963,12 @@ class ModOverlayCaptureService : Service() {
 
         val croppedBitmap = Bitmap.createBitmap(paddedBitmap, 0, 0, image.width, image.height)
         val focusedBitmap = cropForModCard(croppedBitmap)
+        lastTierDetection = try {
+          tierClassifier.classify(focusedBitmap)
+        } catch (error: Exception) {
+          Log.w(logTag, "tierClassifier.classify failed", error)
+          null
+        }
         val statsBitmap = cropForStatsPanel(focusedBitmap)
         val scaledStatsBitmap = scaleForOcr(statsBitmap)
         val shapeDebugBitmap = cropForShapeDebug(focusedBitmap)
@@ -1402,7 +1410,7 @@ class ModOverlayCaptureService : Service() {
       FileOutputStream(outputFile).use { stream ->
         bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
       }
-      if (label == "set" || label == "icon") {
+      if (label == "set" || label == "icon" || label == "focused") {
         try {
           val externalDir = getExternalFilesDir(null)
           if (externalDir != null) {
@@ -1485,6 +1493,8 @@ class ModOverlayCaptureService : Service() {
     debugCropPaths: DebugCropPaths,
   ) {
     stopScanningAnimation()
+    val tierDetection = lastTierDetection
+    lastTierDetection = null
     val normalizedPrimary = extractNormalizedPrimaryFromOcr(text, lines).normalizedPrimary
     val validatedShape = normalizeDetectedShape(iconDetection, normalizedPrimary)
     val normalizedSet = if (OUTER_SHAPE_TRAINING_MODE) null else normalizeDetectedSet(iconDetection)
@@ -1496,6 +1506,11 @@ class ModOverlayCaptureService : Service() {
     Log.d(logTag, "sendCaptureSuccess: topSet=[$topSetDebug]")
     val topShapeDebug = iconDetection?.topShapeMatches?.take(5)?.joinToString(", ") { "${it.name}:${"%.3f".format(it.score)}" }
     Log.d(logTag, "sendCaptureSuccess: topShape=[$topShapeDebug]")
+    val topTierDebug = tierDetection?.topMatches?.take(5)?.joinToString(", ") { "${it.name}:${"%.3f".format(it.score)}" }
+    Log.d(
+      logTag,
+      "sendCaptureSuccess: tier=${tierDetection?.tier} dots=${tierDetection?.dots} tierScore=${"%.3f".format(tierDetection?.tierScore ?: 0.0)} pipScore=${"%.3f".format(tierDetection?.pipScore ?: 0.0)} topTier=[$topTierDebug]",
+    )
     Log.d(logTag, "sendCaptureSuccess: ocrText=${text.replace("\n", " | ")}")
     try {
       val outDir = getExternalFilesDir(null)
@@ -1504,6 +1519,11 @@ class ModOverlayCaptureService : Service() {
           append("lines=${lines.size}\n")
           append("shape=${validatedShape ?: iconDetection?.shape}\n")
           append("set=${normalizedSet ?: iconDetection?.setName}\n")
+          append("tier=${tierDetection?.tier}\n")
+          append("dots=${tierDetection?.dots ?: 0}\n")
+          append("tierScore=${"%.3f".format(tierDetection?.tierScore ?: 0.0)}\n")
+          append("pipScore=${"%.3f".format(tierDetection?.pipScore ?: 0.0)}\n")
+          append("topTier=${tierDetection?.topMatches?.joinToString(", ") { "${it.name}:${"%.3f".format(it.score)}" }}\n")
           append("---RAW---\n")
           append(text)
           append("\n---LINES---\n")
@@ -1574,6 +1594,15 @@ class ModOverlayCaptureService : Service() {
         putExtra(EXTRA_CAPTURE_SHAPE_PATH, debugCropPaths.shapePath)
         putExtra(EXTRA_CAPTURE_ICON_PATH, debugCropPaths.iconPath)
         putExtra(EXTRA_CAPTURE_SET_PATH, debugCropPaths.setPath)
+        putExtra(EXTRA_CAPTURE_TIER, tierDetection?.tier)
+        putExtra(EXTRA_CAPTURE_TIER_LETTER, tierDetection?.tierLetter)
+        putExtra(EXTRA_CAPTURE_TIER_DOTS, tierDetection?.dots ?: 0)
+        putExtra(EXTRA_CAPTURE_TIER_SCORE, tierDetection?.tierScore ?: 0.0)
+        putExtra(EXTRA_CAPTURE_PIP_SCORE, tierDetection?.pipScore ?: 0.0)
+        putStringArrayListExtra(
+          EXTRA_CAPTURE_TOP_TIER_MATCHES,
+          ArrayList(tierDetection?.topMatches?.map { "${it.name}: ${"%.3f".format(it.score)}" } ?: emptyList()),
+        )
       }
     )
   }
@@ -1930,6 +1959,12 @@ class ModOverlayCaptureService : Service() {
     const val EXTRA_CAPTURE_SET_PATH = "captureSetPath"
     const val EXTRA_CAPTURE_ERROR = "captureError"
     const val EXTRA_CAPTURE_TIMESTAMP = "captureTimestamp"
+    const val EXTRA_CAPTURE_TIER = "captureTier"
+    const val EXTRA_CAPTURE_TIER_LETTER = "captureTierLetter"
+    const val EXTRA_CAPTURE_TIER_DOTS = "captureTierDots"
+    const val EXTRA_CAPTURE_TIER_SCORE = "captureTierScore"
+    const val EXTRA_CAPTURE_PIP_SCORE = "capturePipScore"
+    const val EXTRA_CAPTURE_TOP_TIER_MATCHES = "captureTopTierMatches"
     const val EXTRA_CONFIRMED_SET = "confirmedSet"
     const val EXTRA_CONFIRMED_SHAPE = "confirmedShape"
     const val EXTRA_RECOMMENDATION_TITLE = "recommendationTitle"

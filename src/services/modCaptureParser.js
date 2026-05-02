@@ -632,6 +632,7 @@ function buildAnalysisResult({
   topShapeMatches = [],
   topSetMatches = [],
   variantShapeMatchesJson = '',
+  nativeTier = null,
 }) {
   if (!ocrText) {
     return {
@@ -671,7 +672,8 @@ function buildAnalysisResult({
   );
   const secondaries = extractSecondaries(normalizedLines, detectedPrimary, fullText);
   const modLevel = extractModLevel(fullText);
-  const modTier = extractModTier(fullText, normalizedLines);
+  const ocrTier = extractModTier(fullText, normalizedLines);
+  const modTier = chooseTier(ocrTier, nativeTier);
   const summary = summarizeParserState({
     modSet: parsedSet,
     modShape: parsedShape,
@@ -702,12 +704,36 @@ function buildAnalysisResult({
   };
 }
 
+// Reconcile OCR-derived tier with the native tier+pip classifier.
+// OCR text ("15 - E" badge) and native color (cyan/green/blue/purple/gold
+// fill of the icon) are independent signals. We prefer OCR when present
+// (text is the most direct read), use native to upgrade pip-count to 6,
+// and fall back to native color when OCR couldn't resolve a letter.
+const NATIVE_TIER_MIN_SCORE = 0.45;
+const NATIVE_PIP_MIN_SCORE = 0.55;
+function chooseTier(ocrTier, nativeTier) {
+  const native = nativeTier && typeof nativeTier === 'object' ? nativeTier : null;
+  const tierScore = native ? Number(native.tierScore) || 0 : 0;
+  const pipScore = native ? Number(native.pipScore) || 0 : 0;
+  const dots = native ? Number(native.dots) || 0 : 0;
+  const nativeLetter = native && typeof native.tierLetter === 'string' ? native.tierLetter : '';
+  const ocrLetter = ocrTier && /^[56][A-E]$/.test(ocrTier) ? ocrTier.slice(1) : '';
+  const pipPrefix = dots === 6 && pipScore >= NATIVE_PIP_MIN_SCORE ? '6' : '5';
+  if (ocrLetter) {
+    return `${pipPrefix}${ocrLetter}`;
+  }
+  if (nativeLetter && tierScore >= NATIVE_TIER_MIN_SCORE) {
+    return `${pipPrefix}${nativeLetter}`;
+  }
+  return ocrTier;
+}
+
 // In-game the tier letter (E/D/C/B/A) shows next to the mod icon as a
 // compact "15 - A" or "15 A" badge (no LVL/LEVEL prefix), and also in
 // some layouts alongside a LVL banner ("LVL 15 · C"). OCR output is noisy
 // so we try specific patterns first and fall back to per-line matching.
-// Returns '5E'..'5A' or null. 6E needs pip-count context we don't extract
-// yet, so this always maps to the 5-dot tier — user taps 6E manually.
+// Returns '5E'..'5A' or null. 6-dot prefix is applied later by chooseTier()
+// using the native pip-count signal.
 function extractModTier(text, lines) {
   if (!text) return null;
   // Standalone tier letter above the "PRIMARY STAT" header. The mod card's
@@ -716,13 +742,13 @@ function extractModTier(text, lines) {
   // primary-stat landmark keeps this from false-matching on stat letters
   // that appear later in the card.
   if (Array.isArray(lines)) {
-    // Tier frame OCRs as a bare A-E letter before the stat section starts.
-    // Prefer searching everything up to "SECONDARY STATS" so a primary stat
-    // that happens to render above the tier (rare, but seen on some icon
-    // layouts) doesn't block detection.
-    const secIdx = lines.findIndex(l => /secondary\s*stat/i.test(String(l || '')));
-    const scanLimit = secIdx > 0 ? secIdx : lines.length;
-    for (let i = 0; i < scanLimit; i++) {
+    // The "15 - E" tier badge often OCRs as a bare A-E letter on its own
+    // line. SWGOH renders it next to the icon, so the line can land
+    // anywhere in the text — primary header, between sections, or even
+    // mixed into secondary stats. Bare A-E lines elsewhere in the card
+    // are rare (stat names and values include their own letters but never
+    // collapse to one), so scanning the full line list is safe.
+    for (let i = 0; i < lines.length; i++) {
       const trimmed = String(lines[i] || '').trim();
       const solo = trimmed.match(/^([A-E])$/);
       if (solo) return `5${solo[1].toUpperCase()}`;
@@ -802,6 +828,15 @@ export async function analyzeCapturedMod(input) {
   }
 
   if (typeof input === 'object' && (input.ocrText || input.rawText)) {
+    const nativeTier = input.detectedTier || input.detectedTierLetter
+      ? {
+          tier: typeof input.detectedTier === 'string' ? input.detectedTier : '',
+          tierLetter: typeof input.detectedTierLetter === 'string' ? input.detectedTierLetter : '',
+          dots: Number.isFinite(input.detectedTierDots) ? input.detectedTierDots : 0,
+          tierScore: Number.isFinite(input.detectedTierScore) ? input.detectedTierScore : 0,
+          pipScore: Number.isFinite(input.detectedPipScore) ? input.detectedPipScore : 0,
+        }
+      : null;
     return buildAnalysisResult({
       imagePath: input.path || input.imagePath || '',
       ocrText: input.ocrText || input.rawText || '',
@@ -811,6 +846,7 @@ export async function analyzeCapturedMod(input) {
       topShapeMatches: Array.isArray(input.topShapeMatches) ? input.topShapeMatches : [],
       topSetMatches: Array.isArray(input.topSetMatches) ? input.topSetMatches : [],
       variantShapeMatchesJson: typeof input.variantShapeMatchesJson === 'string' ? input.variantShapeMatchesJson : '',
+      nativeTier,
     });
   }
 
