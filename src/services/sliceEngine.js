@@ -817,10 +817,31 @@ function formatSliceProjection(projection, weights = SLICE_RULES.weights) {
   return `${probPct}% chance the bonus roll lands on ${headline.name} (avg ${formattedAvg} on hit, ${projection.eligibleCount} stat${projection.eligibleCount === 1 ? '' : 's'} eligible).`;
 }
 
+// The roster-aware upgrade signal lives on result.ownedUpgradeCount /
+// result.topOwnedUpgrade for callers that want to render it themselves.
+// We deliberately do NOT append it to slice/ladderPlan descriptions any
+// more — the dual overlay's character panel is the authoritative place
+// to render owned-character upgrades, and duplicating into the slice
+// verdict made the popup noisy.
+function formatRosterSuffix() {
+  return '';
+}
+
 // Tier-gated action label. Sits on top of the main finalScore.
 // Sell cases delegate to the main scoring (forcedsell / no users / low score).
 // Hidden-reveal secondaries override everything — the user must level to 12.
-function getTierAction({ tier, secondaries, shape, primary, finalScore, forcedsell, noBuildUse }) {
+function getTierAction({
+  tier,
+  secondaries,
+  shape,
+  primary,
+  finalScore,
+  forcedsell,
+  noBuildUse,
+  ownedUpgradeCount = 0,
+  topOwnedUpgrade = null,
+  rosterAware = false,
+}) {
   const hiddenCount = (secondaries || []).filter((s) => s && s.hidden).length;
   if (hiddenCount > 0) {
     return {
@@ -871,7 +892,8 @@ function getTierAction({ tier, secondaries, shape, primary, finalScore, forcedse
 
   const projection = projectSliceOutcome(secondaries);
   const projText = formatSliceProjection(projection);
-  const projSuffix = projText ? ` ${projText}` : '';
+  const rosterSuffix = formatRosterSuffix(rosterAware, ownedUpgradeCount, topOwnedUpgrade);
+  const projSuffix = (projText ? ` ${projText}` : '') + rosterSuffix;
 
   if (tier === '5C') {
     if (speed || highGain.length >= 1 || avgEff >= 0.4) {
@@ -1026,47 +1048,56 @@ function buildLadderPlan({
   primary,
   forcedsell,
   noBuildUse,
+  ownedUpgradeCount = 0,
+  topOwnedUpgrade = null,
+  rosterAware = false,
 }) {
+  // Append roster-aware upgrade signal to every verdict description so the
+  // popup (which renders ladderPlan.desc) and the slice tab both surface
+  // "Owned upgrade: <Char>" when applicable. Free users (no rosterAware)
+  // see unchanged text.
+  const rosterSuffix = formatRosterSuffix(rosterAware, ownedUpgradeCount, topOwnedUpgrade);
+  const withRoster = (reason) => `${reason}${rosterSuffix}`;
   const notSliceable = (reason) => ({
     verdict: 'NOT_SLICEABLE',
     label: 'Not sliceable',
     color: '#94a3b8',
-    desc: reason,
+    desc: withRoster(reason),
     stopAt: null,
   });
   const sellable = (at, reason) => ({
     verdict: 'SELLABLE',
     label: 'Sellable',
     color: '#f87171',
-    desc: reason,
+    desc: withRoster(reason),
     stopAt: at,
   });
   const capAt5A = (reason) => ({
     verdict: 'CAP_AT_5A',
     label: 'Cap at 5A',
     color: '#facc15',
-    desc: reason,
+    desc: withRoster(reason),
     stopAt: '5A',
   });
   const filler = (at, reason) => ({
     verdict: 'FILLER',
     label: 'Filler',
     color: '#60a5fa',
-    desc: reason,
+    desc: withRoster(reason),
     stopAt: at,
   });
   const usable = (reason) => ({
     verdict: 'USABLE',
     label: 'Usable',
     color: '#4ade80',
-    desc: reason,
+    desc: withRoster(reason),
     stopAt: '6E',
   });
   const sliceNext = (nextTier, reason) => ({
     verdict: 'SLICE_NEXT',
     label: `Slice to ${nextTier}`,
     color: '#22d3ee',
-    desc: reason,
+    desc: withRoster(reason),
     stopAt: nextTier,
   });
 
@@ -1193,6 +1224,15 @@ function buildLadderPlan({
   );
 }
 
+// `getEquippedMod`, when provided, lets the engine compute roster-aware
+// upgrade signals. Contract: getEquippedMod(charName, slotShape) returns
+//   - undefined: character not in the user's roster (or no roster loaded)
+//   - null: owned, but no mod equipped in this slot (scanned mod is an
+//     automatic upgrade)
+//   - <normalized equipped mod>: owned, has a mod here — compared against
+//     the scanned mod via compareScannedVsEquipped
+// Callers without roster data (free path / overlay before unlock) simply
+// omit the callback and the engine returns the same generic recommendations.
 export function evaluateSliceMod({
   chars,
   sliceRef,
@@ -1201,6 +1241,7 @@ export function evaluateSliceMod({
   modSet,
   secondaries,
   tier,
+  getEquippedMod,
 }) {
   const selectedPrimary = normalizeShapePrimary(shape, primary);
   const matches = findMatchingBuilds({ chars, shape, primary: selectedPrimary, modSet });
@@ -1291,6 +1332,53 @@ export function evaluateSliceMod({
   const decision = (forcedsell || noBuildUse) ? "SELL" : getDecisionLabel(Math.round(finalScore));
   const ceiling = getCeilingLabel(upside);
   const nextHit = getNextHitNarrative(secondary.scoredStats);
+
+  // Roster-aware: when the caller passed getEquippedMod, score the scanned
+  // mod against each owned matched character's currently equipped mod in
+  // the same slot. Only count "strong-fit" owned chars (alignedCount >= 2)
+  // so a character who barely matches the shell doesn't show as an upgrade
+  // just because their slot happens to be empty.
+  const ownedComparisons = typeof getEquippedMod === 'function' && shape
+    ? alignedMatches
+        .map((m) => {
+          if ((m.alignedCount || 0) < 2) return null;
+          const equippedMod = getEquippedMod(m.name, shape);
+          if (equippedMod === undefined) return null;
+          if (equippedMod === null) {
+            return {
+              name: m.name,
+              verdict: 'Upgrade',
+              scoreDelta: Number.POSITIVE_INFINITY,
+              equippedMissing: true,
+              matchScore: m.matchScore,
+            };
+          }
+          const comparison = compareScannedVsEquipped({
+            match: { name: m.name, priorities: m.priorityList, fitTier: m.fitTier || 'A' },
+            scannedSecondaries: secondaries,
+            scannedPrimary: selectedPrimary,
+            equippedMod,
+          });
+          if (!comparison) return null;
+          return { name: m.name, ...comparison, equippedMissing: false, matchScore: m.matchScore };
+        })
+        .filter(Boolean)
+    : [];
+  const ownedUpgradeCount = ownedComparisons.filter((c) => c.verdict === 'Upgrade').length;
+  const topOwnedUpgrade = ownedComparisons
+    .filter((c) => c.verdict === 'Upgrade')
+    .sort((a, b) => {
+      // Empty-slot wins are real but should rank by character fit, not
+      // alphabetically — a strong-fit char with an empty slot beats a
+      // weak-fit char with an empty slot. Then for actual mod-vs-mod
+      // upgrades, sort by delta magnitude.
+      if (a.equippedMissing && b.equippedMissing) {
+        return (b.matchScore || 0) - (a.matchScore || 0);
+      }
+      if (a.scoreDelta === b.scoreDelta) return a.name.localeCompare(b.name);
+      return b.scoreDelta - a.scoreDelta;
+    })[0] || null;
+
   const tierAction = tier
     ? getTierAction({
         tier,
@@ -1300,6 +1388,9 @@ export function evaluateSliceMod({
         finalScore,
         forcedsell,
         noBuildUse,
+        ownedUpgradeCount,
+        topOwnedUpgrade,
+        rosterAware: typeof getEquippedMod === 'function',
       })
     : null;
   const ladderPlan = buildLadderPlan({
@@ -1311,8 +1402,11 @@ export function evaluateSliceMod({
     primary: selectedPrimary,
     forcedsell,
     noBuildUse,
+    ownedUpgradeCount,
+    topOwnedUpgrade,
+    rosterAware: typeof getEquippedMod === 'function',
   });
-  const matchedCharacters = alignedMatches.map((m) => ({
+  const allMatchedCharacters = alignedMatches.map((m) => ({
     name: m.name,
     variant: m.variant,
     set: m.set,
@@ -1326,6 +1420,14 @@ export function evaluateSliceMod({
     offPriorityHits: m.offPriorityHits || [],
     primaryPriorityIndex: m.primaryPriorityIndex ?? -1,
   }));
+  // Premium+roster: drop characters the user doesn't own from the surfaced
+  // list so the popup doesn't waste space on locked toons. The full list is
+  // still in scoredStats / consensus calculations above; we're only
+  // narrowing what gets RENDERED. Free users (no getEquippedMod) keep the
+  // full theoretical list so they still see who would want this shell.
+  const matchedCharacters = typeof getEquippedMod === 'function'
+    ? allMatchedCharacters.filter((m) => getEquippedMod(m.name, shape) !== undefined)
+    : allMatchedCharacters;
 
   const reasonLines = [
     ...fit.notes,

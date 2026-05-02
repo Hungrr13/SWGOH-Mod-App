@@ -169,6 +169,7 @@ export function buildOverlayRecommendation(parsed, options = {}) {
     modSet,
     secondaries,
     tier,
+    getEquippedMod: options.getEquippedMod,
   });
 
   const topNames = result.matchedCharacters
@@ -255,9 +256,13 @@ export function buildOverlayRecommendations(parsed, options = {}) {
     modSet,
     secondaries,
     tier,
+    getEquippedMod: options.getEquippedMod,
   });
 
-  const topMatches = result.matchedCharacters.slice(0, 20);
+  // Cap the top-users list. Original 20 was tuned for free users (showing
+  // the broadest set of theoretical fits). For premium+roster (already
+  // owned-filtered upstream) and free both, 8 is a more readable count.
+  const topMatches = result.matchedCharacters.slice(0, 8);
   const noUsers = topMatches.length === 0;
   const hasHidden = hiddenEntries.length > 0;
   const visibleWithRollsDual = (parsed.secondaries || [])
@@ -287,15 +292,16 @@ export function buildOverlayRecommendations(parsed, options = {}) {
           ? `${plan.label} · ${result.finalScore}/100`
           : `${result.decision} ${result.finalScore}/100`;
   const sliceBody = noUsers
-    ? [shell, 'No characters want this shell.'].filter(Boolean).join('\n')
+    ? [shell, '', 'No characters want this shell.'].filter(s => s != null).join('\n')
     : needsLevel
-      ? [shell, levelBody].filter(Boolean).join('\n')
+      ? [shell, '', levelBody].filter(s => s != null).join('\n')
       : secondaries.length < 2
-        ? [shell, 'Need 2+ clear secondaries for slice value.'].filter(Boolean).join('\n')
+        ? [shell, '', 'Need 2+ clear secondaries for slice value.'].filter(s => s != null).join('\n')
         : [
             shell,
+            '',
             plan?.desc || getDecisionDescription(result.decision),
-          ].filter(Boolean).join('\n');
+          ].filter(s => s != null).join('\n');
 
   const charBody = topMatches.length
     ? topMatches.map((m, i) => charLine(m, i, { modStatusFor: options.modStatusFor })).join('\n')

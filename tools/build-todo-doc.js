@@ -422,6 +422,18 @@ const rows = [
     'Bumped Gradle daemon JVM args from -Xmx2g/-XX:MaxMetaspaceSize=512m to -Xmx4g/-XX:MaxMetaspaceSize=1024m',
     'After adding react-native-iap to the classpath, release builds (R8 + Kotlin compile across the full RN+Expo+iap+ads module graph) hit OutOfMemoryError: Metaspace inside the daemon. Symptom was deceptive: the daemon stayed alive at full CPU running endless GC cycles, no APK output, no error to stderr (only visible in ~/.gradle/daemon/8.14.3/daemon-<pid>.out.log). 1g of metaspace leaves comfortable headroom; can lower again if memory becomes scarce.',
   ),
+  todoRow(
+    'OPEN',
+    'Slicer / Alt builds',
+    'Temp-hide alternate builds (variant === "alternate") from matchedCharacters until alt-build scoring is more dialed in',
+    'Each character in chars.js carries a primary build (modSet + secs) and an alternate build (buSet + buSecs). evaluateSliceMod currently surfaces both as separate match entries, which inflates the matched-character list with duplicates that may not represent the user\'s actual usage. Filter alternate variant from matchedCharacters in the engine for now; revisit once we have signal on which alt builds are worth keeping.',
+  ),
+  todoRow(
+    'OPEN',
+    'Slicer / Cross-shape set match',
+    'Match characters by SECONDARY set membership across all shapes, not just by exact shape+set',
+    'When a character\'s build calls for Speed(x4)+Health(x2), a scanned Health-set mod should match that character regardless of shape if its secondaries align — currently only the matching shape gets matched. Engine path: findMatchingBuilds in sliceEngine.js requires shape match; add a secondary-set path that accepts any shape when the scanned mod\'s set fills the x2/x4 slot of the build. Strong-fit threshold should rely on alignedCount/strongAlignedCount, not on shape match.',
+  ),
 ];
 
 const table = new Table({

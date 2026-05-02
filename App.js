@@ -502,10 +502,25 @@ function AppShell() {
               return summary ? { ...summary, owned } : { owned, hasModData: false };
             }
           : null;
+        // Roster-aware EV resolver for the slice engine. Same contract as
+        // SliceScreen's getEquippedMod: undefined when not owned, null when
+        // owned without a mod in this slot, or the equipped mod object.
+        const getEquippedMod = (ownedNow && ownedNow.size > 0)
+          ? (charName, slotShape) => {
+              const baseId = charBaseIds[charName];
+              if (!baseId) return undefined;
+              if (!ownedNow.has(baseId)) return undefined;
+              const summary = rosterState.getModSummary(baseId, slotShape);
+              if (!summary || !summary.hasModData) return undefined;
+              if (summary.slotEmpty) return null;
+              return summary.slotMod || null;
+            }
+          : null;
         const dual = overlayRecommendation.buildOverlayRecommendations(analysis.parsed, {
           rawText: analysis?.rawText ?? '',
           ownedBaseIds: ownedNow,
           modStatusFor,
+          getEquippedMod,
         });
 
         const parsedShape = analysis.parsed.modShape;

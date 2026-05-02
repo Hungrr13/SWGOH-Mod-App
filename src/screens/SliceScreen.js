@@ -150,6 +150,21 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
   }
 
   // ── Engine result ──────────────────────────────────────────────────────────
+  // Roster-aware EV: when the user has a roster loaded (premium-gated), pass
+  // a getEquippedMod resolver so the engine can compare the scanned mod
+  // against each owned matched character's currently equipped mod in the
+  // same slot. Free users (no roster, no callback) get the same generic
+  // mod-only recommendations as before.
+  const getEquippedMod = (charName, slotShape) => {
+    if (!showYours) return undefined;
+    const baseId = CHAR_BASE_IDS[charName];
+    if (!baseId) return undefined;
+    if (ownedIds && !ownedIds.has(baseId)) return undefined;
+    const summary = rosterState.getModSummary(baseId, slotShape);
+    if (!summary || !summary.hasModData) return undefined;
+    if (summary.slotEmpty) return null;
+    return summary.slotMod || null;
+  };
   const result = useMemo(() => {
     if (shape === NONE) return null;
     return evaluateSliceMod({
@@ -165,8 +180,9 @@ export default function SliceScreen({ isActive = true, overlayPrefill = null, on
         hidden: s.hidden,
       })),
       tier,
+      getEquippedMod: showYours ? getEquippedMod : undefined,
     });
-  }, [shape, primary, modSet, secs, tier]);
+  }, [shape, primary, modSet, secs, tier, showYours, ownedIds]);
 
   const dotLevel = tier && String(tier).startsWith('6') ? 6 : 5;
 
