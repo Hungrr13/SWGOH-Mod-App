@@ -389,11 +389,23 @@ function chooseShape(detectedShape, inferredShape, primary, topShapeMatches = []
   });
   if (rankedShape && shapeOk(rankedShape)) return rankedShape;
 
-  // Winner rejected by primary filter — consult all variants for consensus.
+  // Winner was rejected by the primary filter. Prefer the next-best match
+  // from the SAME variant's ranked list before consulting cross-variant
+  // consensus — the winning variant saw the silhouette directly and its
+  // runner-up is usually a closer call than a different variant's winner.
+  // Real failure observed: Circle Protection mod where native winner was
+  // Diamond, runner-up was Circle (correct), but mask-only consensus
+  // picked Cross (wrong) and overrode.
+  if (allowedShapes && allowedShapes.length && parsedMatches.length) {
+    const compatible = parsedMatches.find(m => allowedShapes.includes(m.name));
+    if (compatible && compatible.score >= 0.20) return compatible.name;
+  }
+
+  // Fall back to cross-variant consensus when the winning variant has no
+  // compatible alternative or its scores are too weak to trust.
   const consensus = consensusShape(variantShapeMatches, allowedShapes);
   if (consensus) return consensus;
 
-  // No variants available — fall back to walking the winner's ranked list.
   if (allowedShapes && allowedShapes.length && parsedMatches.length) {
     const compatible = parsedMatches.find(m => allowedShapes.includes(m.name));
     if (compatible) return compatible.name;

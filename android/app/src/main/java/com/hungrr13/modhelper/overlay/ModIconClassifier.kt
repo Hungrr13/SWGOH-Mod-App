@@ -474,6 +474,15 @@ class ModIconClassifier(private val context: Context) {
         val debug = candidate.ruleDebug ?: return@any false
         debug.squareLooksExplicit && (debug.scores["Square"] ?: 0.0) >= 0.75
       }
+    // Like anyCandidateStronglyCross, but for Square: any candidate scoring
+    // Square >= 0.75 is strong evidence of a real Square, even when the
+    // squareLooksExplicit flag isn't set (some Squares with central icons
+    // don't trip squareLooksExplicit but still hit very high Square scores).
+    val anyCandidateStronglySquare =
+      detection.syntheticCandidateDebugs.any { candidate ->
+        val debug = candidate.ruleDebug ?: return@any false
+        (debug.scores["Square"] ?: 0.0) >= 0.75
+      }
     // A Diamond with a central set icon can fool mask-only into tracing a
     // near-round silhouette (circularity 0.86, stronglyRound true) and win
     // Circle ~0.97. The observed top-level geometry still flags strong
@@ -523,6 +532,22 @@ class ModIconClassifier(private val context: Context) {
         // >= 0.60 from different vantage points, trust the majority.
         detection.name == "Square" &&
           strongCrossCandidateCount >= 2 ->
+          "Cross"
+        // SQUARE -> CROSS via geometry: strong centerBar + orthogonal
+        // dominance is the Cross signature (Cross has prominent vertical
+        // and horizontal arms). When combined with at least one candidate
+        // scoring Cross >= 0.60, override Square. Cyan Cross 5E sample:
+        // centerBar=0.74, orthogonal=0.96, inner Cross=0.72 — Square
+        // narrowly won 0.58 in outer scoring but the Cross signature is
+        // unmistakable. Block when ANY candidate sees a strong Square
+        // (>= 0.75) — purple Crit Chance Square 5B was hitting this:
+        // centerBar=0.76, orthogonal=0.89, unguided Cross=0.76, but
+        // inner Square=0.88 was clear evidence of a real Square.
+        detection.name == "Square" &&
+          geometry.centerBarStrength >= 0.65 &&
+          geometry.orthogonalDominance >= 0.85 &&
+          strongCrossCandidateCount >= 1 &&
+          !anyCandidateStronglySquare ->
           "Cross"
         // HIGH-PRIORITY CIRCLE -> DIAMOND RESCUE: a rounded Diamond with a
         // set icon can smooth its mask-only silhouette into a ~0.97 Circle
@@ -665,11 +690,24 @@ class ModIconClassifier(private val context: Context) {
           geometry.orthogonalDominance >= 0.68 &&
           geometry.circularity <= 0.35 ->
           "Cross"
+        // Strong-Diamond-corners rescue: when diamondCornerScore is very
+        // high AND clearly beats triangleScore, the silhouette is a Diamond
+        // even if other candidates flag stronglyRound (rounded Diamonds
+        // light up roundness too). Catches cases where Circle/Diamond
+        // -> Triangle below would otherwise misfire on a Diamond whose
+        // triangleScore barely clears 0.60. Speed Diamond 5B sample:
+        // dCorner=0.86, triScore=0.61 — clearly Diamond, not Triangle.
+        detection.name in listOf("Circle", "Diamond") &&
+          geometry.diamondCornerScore >= 0.82 &&
+          geometry.diamondCornerScore >= geometry.triangleScore + 0.20 &&
+          geometry.aspectRatio in 0.92..1.15 ->
+          "Diamond"
         detection.name in listOf("Circle", "Diamond") &&
           (metrics.cornerCount <= 4 || metrics.smoothedCornerCount <= 4) &&
           geometry.triangleScore >= 0.60 &&
           geometry.aspectRatio >= 0.95 &&
-          geometry.aspectRatio <= 1.30 ->
+          geometry.aspectRatio <= 1.30 &&
+          geometry.triangleScore >= geometry.diamondCornerScore - 0.10 ->
           "Triangle"
         detection.name == "Circle" &&
           !winnerStronglyRound &&
