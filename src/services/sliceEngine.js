@@ -1341,6 +1341,7 @@ export function evaluateSliceMod({
   const ownedComparisons = typeof getEquippedMod === 'function' && shape
     ? alignedMatches
         .map((m) => {
+          if (m.variant === 'alternate') return null;
           if ((m.alignedCount || 0) < 2) return null;
           const equippedMod = getEquippedMod(m.name, shape);
           if (equippedMod === undefined) return null;
@@ -1406,7 +1407,13 @@ export function evaluateSliceMod({
     topOwnedUpgrade,
     rosterAware: typeof getEquippedMod === 'function',
   });
-  const allMatchedCharacters = alignedMatches.map((m) => ({
+  // Temp: hide alternate builds from the surfaced match list. The engine
+  // still consumes both primary and alternate variants in consensus +
+  // scoring upstream — we just don't render the alternate matches in the
+  // popup / slicer character lists. Revisit once alt-build relevance is
+  // dialed in (see TODO: "Slicer / Alt builds").
+  const surfacedMatches = alignedMatches.filter((m) => m.variant !== 'alternate');
+  const allMatchedCharacters = surfacedMatches.map((m) => ({
     name: m.name,
     variant: m.variant,
     set: m.set,
