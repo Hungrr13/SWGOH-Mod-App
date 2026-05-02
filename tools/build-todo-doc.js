@@ -87,10 +87,10 @@ const rows = [
     'Landed 2026-04-20 in commit a704edf + follow-up majority-vote rescue. Verified on-device: Cross now classifies as Cross. Archive on next sweep.',
   ),
   todoRow(
-    'PARKED',
+    'DONE',
     'Shape classifier',
     'Inner cavity mask shows notch at top on Circle \u2014 investigate if portrait-removal or pip-cleanup clipping the rim',
-    'Parked 2026-04-23 pending fresh sample. See shape-classifier-candidate-inner-mask.png from the Apr 20 Circle scan.',
+    'Resolved during the 2026-05-02 shape-classifier sweep. The rescue rules added on 2026-05-02 (strong-Diamond-corners, chooseShape priority fix, Square\u2192Cross geometry rescue, Cross\u2192Square extent rescue) closed the failure modes this notch was causing. Multiple Circle scans verified correct on device.',
   ),
   todoRow(
     'DONE',
@@ -165,10 +165,10 @@ const rows = [
     'DONE: rosterService fetches ?mods=1 and returns per-character missingSlots + upgradeable count (level<15 OR pips<6 OR tier<5). SliceScreen shows \u201cX to upgrade\u201d / missing-slot badges. Slot-level upgrade-vs-scan delta is tracked in the separate Slice-engine slot-badge row.',
   ),
   todoRow(
-    'PARKED',
+    'DONE',
     'Shape classifier',
-    'Second Circle mod reads as Cross: no candidate view sees a round outline (outer circularity 0.404, mask-only circularity 0.333, extent 0.933, stronglyRound=false)',
-    'Parked 2026-04-23 pending broader Circle sample set. Unlike Grievous, this Circle\u2019s mask-only candidate doesn\u2019t see the round outline at all. Hypotheses: (a) capture framing cut off part of the mod, (b) different Circle visual tier/set produces a different silhouette profile. Collect multiple Circle scans (different tiers/sets/primaries) to determine whether new rescue rule is needed or whether it\u2019s a capture artifact.',
+    'Second Circle mod reads as Cross: no candidate view sees a round outline',
+    'Resolved 2026-05-02 via two layered fixes: (1) chooseShape now prefers the same-variant runner-up over cross-variant consensus when the native winner is rejected by the primary-stat filter; (2) the Circle/Diamond\u2192Triangle rescue gained a triangleScore-vs-diamondCornerScore guard so a rounded silhouette with strong diamond geometry no longer flips to Triangle. Verified end-to-end: 3 Circle Offense scans passed, the one remaining 5D Circle Protection misclass turned out to be the chooseShape consensus bug and was fixed in the same commit.',
   ),
   todoRow(
     'DONE',
@@ -431,8 +431,14 @@ const rows = [
   todoRow(
     'OPEN',
     'Slicer / Cross-shape set match',
-    'Match characters by SECONDARY set membership across all shapes, not just by exact shape+set',
-    'When a character\'s build calls for Speed(x4)+Health(x2), a scanned Health-set mod should match that character regardless of shape if its secondaries align — currently only the matching shape gets matched. Engine path: findMatchingBuilds in sliceEngine.js requires shape match; add a secondary-set path that accepts any shape when the scanned mod\'s set fills the x2/x4 slot of the build. Strong-fit threshold should rely on alignedCount/strongAlignedCount, not on shape match.',
+    'Match characters by SECONDARY set membership across all shapes, not just by exact shape+primary',
+    'Today: findMatchingBuilds in sliceEngine.js requires BOTH shape-and-primary match (e.g. char\'s triangle="Crit Chance%" only matches Triangle Crit Chance% mods) AND a set membership check. The set-side already accepts main+side matches. The shape-and-primary side does not. Result: a Triangle Health% mod (great secondaries, character\'s build calls for Speed(x4)+Health(x2)) doesn\'t match any character whose Triangle primary isn\'t Health% even when their build wants the Health-set piece in some slot. Goal: a scanned mod\'s set fill counts toward the build regardless of which shape carries it, so a "shell" match path opens up for set-side fits. Implementation outline: (a) add a "setOnlyMatch" branch in findMatchingBuilds that matches when selectedSet appears in setRequirements with selectedSetCount > 0 and skips the per-shape primary check (this branch tags the match as e.g. fitTier="setSidePiece"); (b) downgrade matchScore vs. main-set+primary matches so set-only matches don\'t crowd out exact fits; (c) per the user spec, strong-fit threshold remains alignedCount/strongAlignedCount on secondaries — set-only matches with weak secondaries still don\'t surface. Edge: don\'t blow up matchedCharacters with every char that has Speed(x4) in their build when scanning a Speed mod with mediocre secondaries — gate by the existing alignedCount >= 2 filter (already in place for ownedComparisons).',
+  ),
+  todoRow(
+    'OPEN',
+    'Slicer / Deep EV modeling',
+    'Project full distribution of post-slice mod power, not just the expected value of a single bonus roll',
+    'Today (Phase 1, c806c92): projectSliceOutcome models a single tier-up — picks one random eligible secondary, returns expected added value per stat. The actionDesc surfaces "X% chance the bonus roll lands on Speed (avg +5 on hit)". Limits: (1) Single-tier only — doesn\'t project 5C → 5B → 5A → 6E end-to-end, so the user can\'t see "by 5A this Speed could realistically be 14-22". (2) Single-stat headline — picks Speed-or-top-weighted only, ignores the joint distribution. (3) No "P(meets threshold)" — no way to express "this mod has a 35% chance of being a 5A Speed >= 18 mod after sliceing the rest of the way." Goal: add projectSliceLadder(secondaries, fromTier, toTier) that walks the tiers, simulates the random-bonus-pick at each step, and returns a probability distribution of final stat values. Then a percentile-based recommendation: "P(Speed >= 18 by 5A) = 42%" / "P(Speed >= 22) = 8%". Inform SLICE/HOLD threshold by the probability of meeting a configurable target (e.g. "Speed >= 15 means slice; expected value isn\'t enough"). Likely needs Monte Carlo (1000+ samples) since the joint distribution doesn\'t close-form, then bucketed reporting in actionDesc. Roster-aware extension: P(this scanned mod beats your equipped mod for owned char X by 5A) — gives a true EV for the slice mats.',
   ),
 ];
 
