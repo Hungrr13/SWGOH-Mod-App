@@ -757,6 +757,66 @@ function getCeilingLabel(upsideScore) {
   return upsideScore >= 65 ? "HIGH CEILING" : "LOW CEILING";
 }
 
+// Project the EV of slicing one tier. Per the SWGOH ruleset a tier-up
+// randomly selects ONE existing secondary that hasn't capped its rolls
+// (rolls < maxRolls per ROLL_RULES_5DOT[stat]) and grants it +1 roll.
+// The added value is uniformly distributed in [rule.min, rule.max].
+//
+// Returns null when there are no eligible secondaries (every stat already
+// at max rolls). Otherwise returns:
+//   {
+//     eligibleCount,                    // how many can still receive a roll
+//     probabilityOfBonus,               // 1/eligibleCount per stat
+//     perStatExpected: [{
+//       name, currentVal, currentRolls,
+//       expectedAddedIfChosen,          // (min+max)/2 of the added roll
+//       minAdded, maxAdded,
+//     }, ...]                            // one entry per ELIGIBLE stat
+//   }
+function projectSliceOutcome(secondaries) {
+  if (!Array.isArray(secondaries) || secondaries.length === 0) return null;
+  const analyzed = secondaries
+    .filter((s) => s && s.name && s.val !== '' && s.val != null)
+    .map((s) => {
+      const rolls = parseInt(s.rolls, 10) || 0;
+      return { name: s.name, val: s.val, rolls, rule: ROLL_RULES_5DOT[s.name] };
+    });
+  const eligible = analyzed.filter((s) => s.rule && s.rolls < s.rule.maxRolls);
+  if (eligible.length === 0) return { eligibleCount: 0, probabilityOfBonus: 0, perStatExpected: [] };
+  const probPerStat = 1 / eligible.length;
+  return {
+    eligibleCount: eligible.length,
+    probabilityOfBonus: probPerStat,
+    perStatExpected: eligible.map((s) => ({
+      name: s.name,
+      currentVal: parseFloat(s.val) || 0,
+      currentRolls: s.rolls,
+      expectedAddedIfChosen: (s.rule.min + s.rule.max) / 2,
+      minAdded: s.rule.min,
+      maxAdded: s.rule.max,
+    })),
+  };
+}
+
+// Format a one-line slice-EV summary suited for the action description.
+// Picks the most consequential stat (Speed first, then highest weighted
+// gain) and reports its bonus probability + average added value.
+function formatSliceProjection(projection, weights = SLICE_RULES.weights) {
+  if (!projection || projection.eligibleCount === 0) return null;
+  const probPct = Math.round(projection.probabilityOfBonus * 100);
+  const speed = projection.perStatExpected.find((s) => s.name === 'Speed');
+  const headline = speed
+    || projection.perStatExpected
+        .map((s) => ({ ...s, weight: (weights && weights[s.name]) || 0 }))
+        .sort((a, b) => b.weight - a.weight)[0];
+  if (!headline) return null;
+  const isSpeed = headline.name === 'Speed';
+  const formattedAvg = isSpeed
+    ? `+${Math.round(headline.expectedAddedIfChosen)}`
+    : `+${headline.expectedAddedIfChosen.toFixed(2)}${headline.name.endsWith('%') ? '%' : ''}`;
+  return `${probPct}% chance the bonus roll lands on ${headline.name} (avg ${formattedAvg} on hit, ${projection.eligibleCount} stat${projection.eligibleCount === 1 ? '' : 's'} eligible).`;
+}
+
 // Tier-gated action label. Sits on top of the main finalScore.
 // Sell cases delegate to the main scoring (forcedsell / no users / low score).
 // Hidden-reveal secondaries override everything — the user must level to 12.
@@ -809,18 +869,22 @@ function getTierAction({ tier, secondaries, shape, primary, finalScore, forcedse
     };
   }
 
+  const projection = projectSliceOutcome(secondaries);
+  const projText = formatSliceProjection(projection);
+  const projSuffix = projText ? ` ${projText}` : '';
+
   if (tier === '5C') {
     if (speed || highGain.length >= 1 || avgEff >= 0.4) {
       return {
         actionLabel: 'SLICE → 5B',
         actionColor: '#86efac',
         actionDesc: speed
-          ? 'Speed secondary present — always worth climbing. Slice to 5B and rescan.'
-          : 'Early rolls promising — continue to 5B and rescan.',
+          ? `Speed at ${speed.val} (${speed.rolls} roll${speed.rolls === 1 ? '' : 's'}) — climb to 5B for another shot.${projSuffix}`
+          : `Early rolls promising — continue to 5B and rescan.${projSuffix}`,
       };
     }
     if (isFixed) return { actionLabel: 'KEEP', actionColor: '#facc15', actionDesc: 'Fixed slot — keep for set completion.' };
-    return { actionLabel: 'SELL', actionColor: '#f87171', actionDesc: 'Weak early rolls — cut losses before 5B.' };
+    return { actionLabel: 'SELL', actionColor: '#f87171', actionDesc: `Weak early rolls — cut losses before 5B.${projSuffix}` };
   }
 
   if (tier === '5B') {
@@ -830,19 +894,19 @@ function getTierAction({ tier, secondaries, shape, primary, finalScore, forcedse
         actionLabel: 'SLICE → 5A',
         actionColor: '#86efac',
         actionDesc: speedWorthy
-          ? `Speed at ${speed.val} across ${speed.rolls} rolls — finish the 5-dot climb.`
-          : 'Rolls trending well — finish the 5-dot climb.',
+          ? `Speed at ${speed.val} across ${speed.rolls} rolls — finish the 5-dot climb.${projSuffix}`
+          : `Rolls trending well — finish the 5-dot climb.${projSuffix}`,
       };
     }
     if (speed && speed.rolls === 1) {
       return {
         actionLabel: 'KEEP',
         actionColor: '#facc15',
-        actionDesc: "Speed with only 1 roll — keep but don't commit to 5A yet.",
+        actionDesc: `Speed with only 1 roll — keep but don't commit to 5A yet.${projSuffix}`,
       };
     }
     if (isFixed) return { actionLabel: 'KEEP', actionColor: '#facc15', actionDesc: 'Fixed slot — keep for set completion.' };
-    return { actionLabel: 'SELL', actionColor: '#f87171', actionDesc: 'Rolls too weak to justify 5A materials.' };
+    return { actionLabel: 'SELL', actionColor: '#f87171', actionDesc: `Rolls too weak to justify 5A materials.${projSuffix}` };
   }
 
   if (tier === '5A') {
@@ -860,14 +924,14 @@ function getTierAction({ tier, secondaries, shape, primary, finalScore, forcedse
       return {
         actionLabel: 'SLICE → 6E',
         actionColor: '#4ade80',
-        actionDesc: 'Speed arrow with speed secondary — always worth 6-dot.',
+        actionDesc: `Speed arrow with speed secondary — always worth 6-dot.${projSuffix}`,
       };
     }
     if (speed && speed.rolls >= 3) {
       return {
         actionLabel: 'SLICE → 6E',
         actionColor: '#4ade80',
-        actionDesc: `Speed hit ${speed.rolls} times already (value ${speed.val}) — high chance of more on 6-dot slice.`,
+        actionDesc: `Speed hit ${speed.rolls} times already (value ${speed.val}) — high chance of more on 6-dot slice.${projSuffix}`,
       };
     }
     if (strongHighGain.length >= 1 && avgEff >= 0.55) {
@@ -875,31 +939,31 @@ function getTierAction({ tier, secondaries, shape, primary, finalScore, forcedse
       return {
         actionLabel: 'SLICE → 6E',
         actionColor: '#4ade80',
-        actionDesc: `${top.name} at ${Math.round(top.eff * 100)}% efficiency — 6-dot multiplies the cap by ${Math.round((1 + top.gain) * 100) / 100}×.`,
+        actionDesc: `${top.name} at ${Math.round(top.eff * 100)}% efficiency — 6-dot multiplies the cap by ${Math.round((1 + top.gain) * 100) / 100}×.${projSuffix}`,
       };
     }
     if (speed && speed.rolls >= 2 && speed.eff >= 0.5 && avgEff >= 0.55) {
       return {
         actionLabel: 'SLICE → 6E',
         actionColor: '#4ade80',
-        actionDesc: `Speed at ${speed.val} (${speed.rolls} rolls) with solid overall efficiency — worth 6-dot.`,
+        actionDesc: `Speed at ${speed.val} (${speed.rolls} rolls) with solid overall efficiency — worth 6-dot.${projSuffix}`,
       };
     }
     if (speed && speed.rolls === 1) {
       return {
         actionLabel: 'KEEP',
         actionColor: '#facc15',
-        actionDesc: "Speed only hit once — 6-dot gain is just +1 speed max (+3%). Don't burn 6-dot mats.",
+        actionDesc: `Speed only hit once — 6-dot gain is just +1 speed max (+3%). Don't burn 6-dot mats.${projSuffix}`,
       };
     }
     if (avgEff >= 0.5 || isFixed) {
       return {
         actionLabel: 'KEEP',
         actionColor: '#facc15',
-        actionDesc: "Solid 5A — usable, but efficiency doesn't justify 6-dot investment.",
+        actionDesc: `Solid 5A — usable, but efficiency doesn't justify 6-dot investment.${projSuffix}`,
       };
     }
-    return { actionLabel: 'SELL', actionColor: '#f87171', actionDesc: 'Rolled poorly — not worth 6-dot cost.' };
+    return { actionLabel: 'SELL', actionColor: '#f87171', actionDesc: `Rolled poorly — not worth 6-dot cost.${projSuffix}` };
   }
 
   if (tier === '6E') {

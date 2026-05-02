@@ -44,9 +44,15 @@ function normalizeSecondaries(secondaries = []) {
     .filter(item => item?.stat && item.stat !== 'Not found')
     .map(item => {
       const numeric = String(item.value ?? '').replace(/[^\d.]/g, '');
+      // Preserve rolls + hidden so the slice engine sees the full mod
+      // state. Earlier this dropped rolls, so the popup's ladderPlan
+      // saw every secondary at 0 rolls — speedMayBoost stayed false
+      // even with a real 2-roll Speed, falling through to FILLER.
       return {
         name: item.stat,
         val: numeric,
+        rolls: item.rolls != null ? String(item.rolls) : '',
+        hidden: !!item.hidden,
       };
     })
     .filter(item => item.name && item.val !== '' && !Number.isNaN(Number(item.val)));
