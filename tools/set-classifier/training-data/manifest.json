@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-19T17:25:04.154Z",
+  "generatedAt": "2026-05-02T21:16:44.417Z",
   "sourceDir": "tools\\set-classifier\\debug-crops",
   "labelsPath": "tools\\set-classifier\\debug-crops\\set-labels.json",
   "samples": [
@@ -834,6 +834,334 @@
       "notes": "",
       "source": "Triangle Sets/1776618961857-set-tenacity.png",
       "relativePath": "triangle/tenacity/1776618961857-set-tenacity.png"
+    },
+    {
+      "file": "Generic Sets/1777755262218-set-health.png",
+      "set": "Health",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777755262218-set-health.png",
+      "relativePath": "generic/health/1777755262218-set-health.png"
+    },
+    {
+      "file": "Generic Sets/1777755302467-set-health.png",
+      "set": "Health",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777755302467-set-health.png",
+      "relativePath": "generic/health/1777755302467-set-health.png"
+    },
+    {
+      "file": "Generic Sets/1777755317266-set-health.png",
+      "set": "Health",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777755317266-set-health.png",
+      "relativePath": "generic/health/1777755317266-set-health.png"
+    },
+    {
+      "file": "Generic Sets/1777755333790-set-health.png",
+      "set": "Health",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777755333790-set-health.png",
+      "relativePath": "generic/health/1777755333790-set-health.png"
+    },
+    {
+      "file": "Generic Sets/1777755385004-set-health.png",
+      "set": "Health",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777755385004-set-health.png",
+      "relativePath": "generic/health/1777755385004-set-health.png"
+    },
+    {
+      "file": "Generic Sets/1777755573338-set-defense.png",
+      "set": "Defense",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777755573338-set-defense.png",
+      "relativePath": "generic/defense/1777755573338-set-defense.png"
+    },
+    {
+      "file": "Generic Sets/1777755598448-set-defense.png",
+      "set": "Defense",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777755598448-set-defense.png",
+      "relativePath": "generic/defense/1777755598448-set-defense.png"
+    },
+    {
+      "file": "Generic Sets/1777755621509-set-defense.png",
+      "set": "Defense",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777755621509-set-defense.png",
+      "relativePath": "generic/defense/1777755621509-set-defense.png"
+    },
+    {
+      "file": "Generic Sets/1777755634143-set-defense.png",
+      "set": "Defense",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777755634143-set-defense.png",
+      "relativePath": "generic/defense/1777755634143-set-defense.png"
+    },
+    {
+      "file": "Generic Sets/1777755648840-set-defense.png",
+      "set": "Defense",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777755648840-set-defense.png",
+      "relativePath": "generic/defense/1777755648840-set-defense.png"
+    },
+    {
+      "file": "Generic Sets/1777755676323-set-speed.png",
+      "set": "Speed",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777755676323-set-speed.png",
+      "relativePath": "generic/speed/1777755676323-set-speed.png"
+    },
+    {
+      "file": "Generic Sets/1777755706564-set-speed.png",
+      "set": "Speed",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777755706564-set-speed.png",
+      "relativePath": "generic/speed/1777755706564-set-speed.png"
+    },
+    {
+      "file": "Generic Sets/1777755718844-set-speed.png",
+      "set": "Speed",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777755718844-set-speed.png",
+      "relativePath": "generic/speed/1777755718844-set-speed.png"
+    },
+    {
+      "file": "Generic Sets/1777755732069-set-speed.png",
+      "set": "Speed",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777755732069-set-speed.png",
+      "relativePath": "generic/speed/1777755732069-set-speed.png"
+    },
+    {
+      "file": "Generic Sets/1777755753711-set-speed.png",
+      "set": "Speed",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777755753711-set-speed.png",
+      "relativePath": "generic/speed/1777755753711-set-speed.png"
+    },
+    {
+      "file": "Generic Sets/1777755773739-set-crit dmg.png",
+      "set": "Crit Dmg",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777755773739-set-crit dmg.png",
+      "relativePath": "generic/crit-dmg/1777755773739-set-crit dmg.png"
+    },
+    {
+      "file": "Generic Sets/1777755786224-set-crit dmg.png",
+      "set": "Crit Dmg",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777755786224-set-crit dmg.png",
+      "relativePath": "generic/crit-dmg/1777755786224-set-crit dmg.png"
+    },
+    {
+      "file": "Generic Sets/1777755804433-set-crit dmg.png",
+      "set": "Crit Dmg",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777755804433-set-crit dmg.png",
+      "relativePath": "generic/crit-dmg/1777755804433-set-crit dmg.png"
+    },
+    {
+      "file": "Generic Sets/1777755869258-set-crit dmg.png",
+      "set": "Crit Dmg",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777755869258-set-crit dmg.png",
+      "relativePath": "generic/crit-dmg/1777755869258-set-crit dmg.png"
+    },
+    {
+      "file": "Generic Sets/1777755881521-set-crit dmg.png",
+      "set": "Crit Dmg",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777755881521-set-crit dmg.png",
+      "relativePath": "generic/crit-dmg/1777755881521-set-crit dmg.png"
+    },
+    {
+      "file": "Generic Sets/1777755898235-set-crit chance.png",
+      "set": "Crit Chance",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777755898235-set-crit chance.png",
+      "relativePath": "generic/crit-chance/1777755898235-set-crit chance.png"
+    },
+    {
+      "file": "Generic Sets/1777755910198-set-crit chance.png",
+      "set": "Crit Chance",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777755910198-set-crit chance.png",
+      "relativePath": "generic/crit-chance/1777755910198-set-crit chance.png"
+    },
+    {
+      "file": "Generic Sets/1777755926975-set-crit chance.png",
+      "set": "Crit Chance",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777755926975-set-crit chance.png",
+      "relativePath": "generic/crit-chance/1777755926975-set-crit chance.png"
+    },
+    {
+      "file": "Generic Sets/1777755942238-set-crit chance.png",
+      "set": "Crit Chance",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777755942238-set-crit chance.png",
+      "relativePath": "generic/crit-chance/1777755942238-set-crit chance.png"
+    },
+    {
+      "file": "Generic Sets/1777755957392-set-crit chance.png",
+      "set": "Crit Chance",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777755957392-set-crit chance.png",
+      "relativePath": "generic/crit-chance/1777755957392-set-crit chance.png"
+    },
+    {
+      "file": "Generic Sets/1777755972817-set-potency.png",
+      "set": "Potency",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777755972817-set-potency.png",
+      "relativePath": "generic/potency/1777755972817-set-potency.png"
+    },
+    {
+      "file": "Generic Sets/1777755988760-set-potency.png",
+      "set": "Potency",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777755988760-set-potency.png",
+      "relativePath": "generic/potency/1777755988760-set-potency.png"
+    },
+    {
+      "file": "Generic Sets/1777756003340-set-potency.png",
+      "set": "Potency",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777756003340-set-potency.png",
+      "relativePath": "generic/potency/1777756003340-set-potency.png"
+    },
+    {
+      "file": "Generic Sets/1777756019744-set-potency.png",
+      "set": "Potency",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777756019744-set-potency.png",
+      "relativePath": "generic/potency/1777756019744-set-potency.png"
+    },
+    {
+      "file": "Generic Sets/1777756032767-set-potency.png",
+      "set": "Potency",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777756032767-set-potency.png",
+      "relativePath": "generic/potency/1777756032767-set-potency.png"
+    },
+    {
+      "file": "Generic Sets/1777756049156-set-tenacity.png",
+      "set": "Tenacity",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777756049156-set-tenacity.png",
+      "relativePath": "generic/tenacity/1777756049156-set-tenacity.png"
+    },
+    {
+      "file": "Generic Sets/1777756062506-set-tenacity.png",
+      "set": "Tenacity",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777756062506-set-tenacity.png",
+      "relativePath": "generic/tenacity/1777756062506-set-tenacity.png"
+    },
+    {
+      "file": "Generic Sets/1777756074611-set-tenacity.png",
+      "set": "Tenacity",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777756074611-set-tenacity.png",
+      "relativePath": "generic/tenacity/1777756074611-set-tenacity.png"
+    },
+    {
+      "file": "Generic Sets/1777756087197-set-tenacity.png",
+      "set": "Tenacity",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777756087197-set-tenacity.png",
+      "relativePath": "generic/tenacity/1777756087197-set-tenacity.png"
+    },
+    {
+      "file": "Generic Sets/1777756115633-set-tenacity.png",
+      "set": "Tenacity",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777756115633-set-tenacity.png",
+      "relativePath": "generic/tenacity/1777756115633-set-tenacity.png"
+    },
+    {
+      "file": "Generic Sets/1777756132329-set-offense.png",
+      "set": "Offense",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777756132329-set-offense.png",
+      "relativePath": "generic/offense/1777756132329-set-offense.png"
+    },
+    {
+      "file": "Generic Sets/1777756145986-set-offense.png",
+      "set": "Offense",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777756145986-set-offense.png",
+      "relativePath": "generic/offense/1777756145986-set-offense.png"
+    },
+    {
+      "file": "Generic Sets/1777756159316-set-offense.png",
+      "set": "Offense",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777756159316-set-offense.png",
+      "relativePath": "generic/offense/1777756159316-set-offense.png"
+    },
+    {
+      "file": "Generic Sets/1777756198022-set-offense.png",
+      "set": "Offense",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777756198022-set-offense.png",
+      "relativePath": "generic/offense/1777756198022-set-offense.png"
+    },
+    {
+      "file": "Generic Sets/1777756221030-set-offense.png",
+      "set": "Offense",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777756221030-set-offense.png",
+      "relativePath": "generic/offense/1777756221030-set-offense.png"
+    },
+    {
+      "file": "Generic Sets/1777756552055-set-speed.png",
+      "set": "Speed",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777756552055-set-speed.png",
+      "relativePath": "generic/speed/1777756552055-set-speed.png"
     }
   ]
 }

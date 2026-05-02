@@ -1524,6 +1524,8 @@ class ModOverlayCaptureService : Service() {
           append("tierScore=${"%.3f".format(tierDetection?.tierScore ?: 0.0)}\n")
           append("pipScore=${"%.3f".format(tierDetection?.pipScore ?: 0.0)}\n")
           append("topTier=${tierDetection?.topMatches?.joinToString(", ") { "${it.name}:${"%.3f".format(it.score)}" }}\n")
+          append("topSet=${iconDetection?.topSetMatches?.take(8)?.joinToString(", ") { "${it.name}:${"%.3f".format(it.score)}" }}\n")
+          append("topShape=${iconDetection?.topShapeMatches?.take(6)?.joinToString(", ") { "${it.name}:${"%.3f".format(it.score)}" }}\n")
           append("---RAW---\n")
           append(text)
           append("\n---LINES---\n")
