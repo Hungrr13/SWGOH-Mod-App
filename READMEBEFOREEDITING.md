@@ -108,6 +108,43 @@ This is the current repo map after the cleanup pass. If you are not sure where t
 - Cavity candidates (`inner`/`unguided`) threshold dark pixels and fill holes; they used to win by default but blob into a circle-like mask when the primary icon has enough disconnected dark elements (e.g. Crit Dmg crossed swords) that `fillInternalHoles` can't fully enclose.
 - `mask-only` remains a last-resort fallback for when every guided candidate scores below the minimum confidence bar.
 
+## Recent changes (May 2026)
+
+### Scanner: native tier+pip classifier with OCR cross-check (`a476df2`)
+- New `android/app/src/main/java/com/hungrr13/modhelper/overlay/ModTierClassifier.kt` reads the colored interior fill of the mod icon (cyan/green/blue/purple/gold for E/D/C/B/A) and counts pip dots above the icon (5 vs 6) via OpenCV. Returns `TierDetection { tier, tierLetter, dots, tierScore, pipScore, topMatches }`.
+- Wired through `ModOverlayCaptureService` (instantiate, run after focused crop, broadcast extras, debug-dump) and `ModOverlayCaptureModule` (bridge to JS event). Six new intent extras: `EXTRA_CAPTURE_TIER`, `EXTRA_CAPTURE_TIER_LETTER`, `EXTRA_CAPTURE_TIER_DOTS`, `EXTRA_CAPTURE_TIER_SCORE`, `EXTRA_CAPTURE_PIP_SCORE`, `EXTRA_CAPTURE_TOP_TIER_MATCHES`.
+- `src/services/modCaptureParser.js` adds `chooseTier(ocrTier, nativeTier)`: native overrides OCR when `tierScore ≥ 0.55` and `pipScore ≥ 0.55` and `dots ∈ {5,6}`; OCR-`5X` is upgraded to `6X` when native sees 6 dots confidently. The cross-check rescues 6E mods (gold interior is meaningless on 6-dot — they retain the 5A origin color, so OCR letter wins; native pip count promotes prefix to 6).
+- Verified end-to-end: 5E cyan, 5D green, 5C blue, 5B purple, 5A gold all classify natively with margin ≥ 0.46. 6E reads correctly via OCR letter + native pip count.
+
+### Scanner: shape rescue rule overhaul (`1db6cf8`, `6026201`, `7433247`)
+- Triangle→Diamond rescues at line 633/642 of `ModIconClassifier.kt` now require `diamondCornerScore ≥ triangleScore + 0.10` so a real Triangle whose silhouette also scores diamond geometry (5E cyan Triangle case: tri=0.74 vs dCorner=0.76) doesn't get flipped.
+- New Cross→Square rescue (extent-based): when the chosen silhouette has `extent ≥ 0.82` and square aspect, it physically can't be a Cross (which has empty corners, max extent ~0.70). Added before the existing Cross→Square rescue.
+- Variant-mean set aggregation: `detectSet`'s aggregation across crop variants now uses the full mean instead of `topHalf.average()`. The earlier topHalf logic let one misaligned crop crown a class that lost in every other variant (5E cyan Square Offense was hitting this — variant 1 mis-cropped scored Crit Chance 1.28 while variants 2 & 3 picked Offense; full mean: Offense 0.75 vs Crit Chance 0.63 → Offense wins).
+- Strong-Diamond-corners rescue: `Circle/Diamond → Diamond` when `diamondCornerScore ≥ 0.82` and clearly beats triangleScore by 0.20+, even on `stronglyRound=true` silhouettes (rounded Diamonds light up roundness too). Fixed Speed Diamond 5B that was reading as Triangle via the per-variant Circle winner + Circle/Diamond→Triangle rescue.
+- `chooseShape` in `modCaptureParser.js` now prefers the same-variant runner-up over cross-variant consensus when the native winner is rejected by the primary-stat compatibility filter. Green Circle Protection 5D was hitting the bug: native picked Diamond (rejected by Protection% filter), mask-only consensus picked Cross (wrong), but outer's runner-up was Circle (correct).
+- Square→Cross via geometry: `centerBar ≥ 0.65` + `orthogonal ≥ 0.85` + at least one Cross-strong candidate, gated by `!anyCandidateStronglySquare` (any candidate Square ≥ 0.75) so real Squares with strong inner-Square scores don't get flipped.
+
+### Scanner: 40 set-classifier training samples (`c255815`)
+- The "generic" set profile (used for Square / Diamond / Cross / Circle shapes) shipped with one training sample per set, so the model overfit and Squares with burst-style icons (Health, Crit Damage, Speed) collapsed onto whichever single template happened to win — overwhelmingly Crit Chance.
+- Added 5 live captures per set (Health / Defense / Speed / Crit Dmg / Crit Chance / Potency / Tenacity / Offense) to the generic profile, regenerated via `npm run export:set-dataset`. Triangle / Arrow profiles already had richer training data and are unchanged.
+- Verified: Square Health / Defense / Speed / Crit Damage all classify correctly post-retrain.
+
+### Slicer: 15E mods no longer gated behind "Level Mod First" (`3d020ab`)
+- `extractModLevel` now recognizes the in-game level/tier badge format ("15 - E", "15-E", "15E") in addition to LEVEL/LVL prefixes. The badge text is what survives OCR on the stats panel; the LEVEL banner doesn't.
+- `overlayRecommendation.js`'s `needsLeveling` check now treats any mod with all 4 secondaries visible as past the level-12 reveal milestone, even when modLevel can't be parsed from OCR. The level-15 bump is a separate decision the slicer evaluates downstream — not a blocker for slice advice.
+
+### Slicer: per-slice EV projection + popup-rolls bugfix (`c806c92`)
+- New `projectSliceOutcome(secondaries)` computes the post-tier-up roll distribution: one random non-capped secondary gets +1 roll, value uniform in `[stat.min, stat.max]`. `formatSliceProjection` picks the most consequential stat (Speed preferred, then highest weighted gain) and renders a one-line EV summary appended to actionDesc.
+- Bug fix: `normalizeSecondaries` was dropping rolls and hidden, so the popup's `evaluateSliceMod` saw every secondary at 0 rolls — buildLadderPlan's `speedMayBoost` check stayed false even on a 2-roll Speed mod, falling through to FILLER. Now the popup matches the Slice tab.
+
+### Slicer: roster-aware EV (premium) + UI polish (`42be5c8`, `135e0a8`)
+- `evaluateSliceMod` accepts an optional `getEquippedMod(charName, slot)` callback. For each owned strong-fit matched character (`alignedCount ≥ 2`), the engine compares the scanned mod's EV against their currently equipped mod in the same slot via `compareScannedVsEquipped`. Counts upgrades and ranks the top one. Free users (no callback) get the same generic mod-only recommendations as before.
+- `matchedCharacters` is filtered to owned-only when `getEquippedMod` is provided so the popup stops listing un-owned toons. Free users keep the full theoretical fit list.
+- Top-users list cap reduced from 20 → 8 in the popup characters panel.
+- Slice body now adds a blank line between the shell line and the verdict text so the right panel breathes.
+- Roster suffix on slice/ladderPlan descriptions removed — the characters panel is the authoritative place to render owned upgrades, so duplicating the signal in the slice verdict was noise.
+- Alternate-build matches (`variant === 'alternate'`) hidden from the surfaced match list and the owned-upgrade computation. Engine consensus + scoring upstream still consume both variants — only the rendered output is narrowed. Tracks the open "Slicer / Alt builds" TODO.
+
 ## Recent changes (April 2026)
 
 ### Premium hardening: cold-start reconcile + native signature verifier + R8
