@@ -811,13 +811,19 @@ function extractModTier(text, lines) {
 }
 
 // OCR often renders the mod-level banner as "LEVEL 15", "Level 15", or
-// "Lvl. 15". Return the first 1–15 integer that follows any of those.
+// "Lvl. 15". Also catches the in-game "15 - E" / "15-E" badge that sits
+// next to the icon — same digits, no "level" prefix. Returns 1–15 or null.
 function extractModLevel(text) {
   if (!text) return null;
   const patterns = [
     /\blevel\s*\.?\s*(\d{1,2})\b/i,
     /\blvl\s*\.?\s*(\d{1,2})\b/i,
     /\bl[vil]{1,2}\s*\.?\s*(\d{1,2})\b/i,
+    // Badge format: "15 - E", "15-E", "15E" — digits followed by an
+    // optional separator and a tier letter A-E. Restrict to 1-2 digit
+    // numbers and require the trailing tier letter so we don't false-
+    // match secondary-stat values like "15 Speed".
+    /\b(\d{1,2})\s*[-–—]?\s*[A-E]\b/,
   ];
   for (const p of patterns) {
     const m = text.match(p);

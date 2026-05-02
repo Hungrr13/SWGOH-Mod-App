@@ -86,9 +86,16 @@ export function buildOverlayRecommendation(parsed, options = {}) {
     ? 'Level this mod to 12 and rescan for slice advice.'
     : null;
   // If the OCR saw a mod level >= 13, the mod has upgrade rolls even if the
-  // (N) prefix was missed — don't force a "needs leveling" verdict.
+  // (N) prefix was missed — don't force a "needs leveling" verdict. Also
+  // treat any mod with all 4 secondaries visible (no hidden reveals
+  // pending) as past the level-12 reveal milestone — the level-15 bump
+  // is a separate decision the slicer evaluates downstream, not a
+  // blocker for slice advice.
   const modLevel = Number(parsed?.modLevel) || 0;
-  const treatAsMaxed = modLevel >= 13;
+  const visibleNonHidden = (parsed.secondaries || [])
+    .filter(s => s && !s.hidden && s.stat && s.stat !== 'Not found').length;
+  const allSecondariesVisible = visibleNonHidden >= 4;
+  const treatAsMaxed = modLevel >= 13 || allSecondariesVisible;
   const needsLeveling = hiddenEntries.length > 0 || (!treatAsMaxed && allSingleRoll);
 
   if (needsLeveling) {
@@ -254,7 +261,10 @@ export function buildOverlayRecommendations(parsed, options = {}) {
   const allSingleRollDual = visibleWithRollsDual.length >= 1
     && visibleWithRollsDual.every(s => s._rolls === 1);
   const modLevelDual = Number(parsed?.modLevel) || 0;
-  const treatAsMaxedDual = modLevelDual >= 13;
+  const visibleNonHiddenDual = (parsed.secondaries || [])
+    .filter(s => s && !s.hidden && s.stat && s.stat !== 'Not found').length;
+  const allSecondariesVisibleDual = visibleNonHiddenDual >= 4;
+  const treatAsMaxedDual = modLevelDual >= 13 || allSecondariesVisibleDual;
   const needsLevel = hasHidden || (!treatAsMaxedDual && allSingleRollDual);
   const levelBody = hasHidden
     ? 'Level this mod to 12 and rescan for slice advice.'
