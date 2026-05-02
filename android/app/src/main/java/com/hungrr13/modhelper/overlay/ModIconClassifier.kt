@@ -629,19 +629,25 @@ class ModIconClassifier(private val context: Context) {
           "Diamond"
         // Triangle has 3 corners; Diamond has 4. If Triangle won but the
         // outline has 4 corners AND strong diamond geometry, that's a
-        // misread Diamond.
+        // misread Diamond. Require diamondCornerScore to clearly beat
+        // triangleScore — a real Triangle's silhouette can score both
+        // metrics in the same 0.7 band (5E cyan Triangle case: tri=0.74,
+        // dCorner=0.76 was getting wrongly flipped).
         detection.name == "Triangle" &&
           metrics.smoothedCornerCount == 4 &&
           geometry.diamondDiagonalScore >= 0.65 &&
-          geometry.diamondCornerScore >= 0.55 ->
+          geometry.diamondCornerScore >= 0.55 &&
+          geometry.diamondCornerScore >= geometry.triangleScore + 0.10 ->
           "Diamond"
         // Rounded Diamonds can smooth down to 3 corners, defeating the
         // corner-count check above. If diamondCornerScore is very strong on
         // its own — a signature of 4 diamond corners even when the outline
-        // smooths — override Triangle to Diamond.
+        // smooths — override Triangle to Diamond. Same triangleScore guard
+        // applies: a real Triangle with high triangleScore stays a Triangle.
         detection.name == "Triangle" &&
           metrics.smoothedCornerCount in 3..5 &&
-          geometry.diamondCornerScore >= 0.80 ->
+          geometry.diamondCornerScore >= 0.80 &&
+          geometry.diamondCornerScore >= geometry.triangleScore + 0.10 ->
           "Diamond"
         detection.name in listOf("Circle", "Diamond") &&
           geometry.centerBarStrength >= 0.48 &&
