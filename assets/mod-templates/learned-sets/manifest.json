@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-02T21:16:44.417Z",
+  "generatedAt": "2026-05-02T21:33:08.136Z",
   "sourceDir": "tools\\set-classifier\\debug-crops",
   "labelsPath": "tools\\set-classifier\\debug-crops\\set-labels.json",
   "samples": [
@@ -1162,6 +1162,70 @@
       "notes": "",
       "source": "Generic Sets/1777756552055-set-speed.png",
       "relativePath": "generic/speed/1777756552055-set-speed.png"
+    },
+    {
+      "file": "Generic Sets/1777757220786-set-offense.png",
+      "set": "Offense",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777757220786-set-offense.png",
+      "relativePath": "generic/offense/1777757220786-set-offense.png"
+    },
+    {
+      "file": "Generic Sets/1777757455390-set-offense.png",
+      "set": "Offense",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777757455390-set-offense.png",
+      "relativePath": "generic/offense/1777757455390-set-offense.png"
+    },
+    {
+      "file": "Generic Sets/1777757471870-set-offense.png",
+      "set": "Offense",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777757471870-set-offense.png",
+      "relativePath": "generic/offense/1777757471870-set-offense.png"
+    },
+    {
+      "file": "Generic Sets/1777757491471-set-offense.png",
+      "set": "Offense",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777757491471-set-offense.png",
+      "relativePath": "generic/offense/1777757491471-set-offense.png"
+    },
+    {
+      "file": "Generic Sets/1777757522999-set-offense.png",
+      "set": "Offense",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777757522999-set-offense.png",
+      "relativePath": "generic/offense/1777757522999-set-offense.png"
+    },
+    {
+      "file": "Generic Sets/1777757538704-set-offense.png",
+      "set": "Offense",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777757538704-set-offense.png",
+      "relativePath": "generic/offense/1777757538704-set-offense.png"
+    },
+    {
+      "file": "Generic Sets/1777757560809-set-offense.png",
+      "set": "Offense",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777757560809-set-offense.png",
+      "relativePath": "generic/offense/1777757560809-set-offense.png"
+    },
+    {
+      "file": "Generic Sets/1777757580167-set-offense.png",
+      "set": "Offense",
+      "profile": "generic",
+      "notes": "",
+      "source": "Generic Sets/1777757580167-set-offense.png",
+      "relativePath": "generic/offense/1777757580167-set-offense.png"
     }
   ]
 }

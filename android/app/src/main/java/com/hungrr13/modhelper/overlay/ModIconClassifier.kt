@@ -583,6 +583,17 @@ class ModIconClassifier(private val context: Context) {
           geometry.aspectRatio in 0.92..1.10 &&
           geometry.extent <= 0.73 ->
           "Diamond"
+        // HIGH-PRIORITY CROSS -> SQUARE (extent-based): a Cross physically
+        // cannot fill more than ~0.70 of its bbox — the four corners stay
+        // empty. When the chosen silhouette has very high extent (>= 0.82)
+        // and square-ish aspect, it's a Square whose central icon faked
+        // enough vertical+horizontal mass for Cross scoring to edge past
+        // Square. Calibrated against the Square Offense sample where
+        // outer extent=0.88 with Cross beating Square 0.71 vs 0.55.
+        detection.name == "Cross" &&
+          geometry.extent >= 0.82 &&
+          geometry.aspectRatio in 0.92..1.12 ->
+          "Square"
         // Cross -> Square rescue: only when no candidate actually saw a
         // strong Cross signal. A Speed-set Cross has its arms highlighted
         // in inner/outer candidate views even though mask-only looks square
@@ -4217,10 +4228,14 @@ class ModIconClassifier(private val context: Context) {
     }
 
     if (classScoreAccumulator.isNotEmpty()) {
+      // Average ALL variant scores per class, not just the top half. The
+      // earlier topHalf logic let a single misaligned crop crown a class
+      // that lost in every other variant — observed on a Square Offense
+      // 5E mod where one bad crop scored Crit Chance 1.28 while the other
+      // two variants picked Offense (1.07, 0.91), and the topHalf-of-3 =
+      // top-1 logic still picked Crit Chance.
       val aggregates = classScoreAccumulator.mapValues { (_, scores) ->
-        val sorted = scores.sortedDescending()
-        val topK = sorted.take(kotlin.math.max(1, sorted.size / 2))
-        topK.average()
+        if (scores.isEmpty()) 0.0 else scores.average()
       }
       val ranked = aggregates.entries.sortedByDescending { it.value }
       Log.d(TAG, "setScore aggregate --- across ${classScoreAccumulator.values.firstOrNull()?.size ?: 0} variants ---")
